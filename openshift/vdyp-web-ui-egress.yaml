@@ -1,0 +1,13 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vdyp-web-ui-egress-#{ENV}#
+  namespace: "#{NAMESPACE}#"
+spec:
+  podSelector:
+    matchLabels:
+      app: vdyp-web-ui-#{ENV}#
+  policyTypes:
+    - Egress
+  egress:
+    - {}

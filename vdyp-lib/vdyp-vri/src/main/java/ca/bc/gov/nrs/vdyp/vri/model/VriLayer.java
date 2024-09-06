@@ -19,11 +19,12 @@ public class VriLayer extends BaseVdypLayer<VriSpecies, VriSite> implements Inpu
 	private final Optional<String> primaryGenus; // FIPL_1C/JPRIME_L1 ISPP
 	private final Optional<String> secondaryGenus; // FIPL_1C/JPRIME_L1 ISPS
 	private final Optional<Integer> empericalRelationshipParameterIndex; // INXL1/GRPBA1
+	private final float ageIncrease; // YOUNG1/AGE_INCR
 
 	public VriLayer(
 			PolygonIdentifier polygonIdentifier, LayerType layer, float crownClosure, Optional<Float> baseArea,
 			Optional<Float> treesPerHectare, float utilization, Optional<String> primaryGenus,
-			Optional<String> secondaryGenus, Optional<Integer> empericalRelationshipParameterIndex
+			Optional<String> secondaryGenus, Optional<Integer> empericalRelationshipParameterIndex, float ageIncrease
 	) {
 		super(polygonIdentifier, layer, Optional.empty());
 		this.crownClosure = crownClosure;
@@ -33,6 +34,7 @@ public class VriLayer extends BaseVdypLayer<VriSpecies, VriSite> implements Inpu
 		this.primaryGenus = primaryGenus;
 		this.secondaryGenus = secondaryGenus;
 		this.empericalRelationshipParameterIndex = empericalRelationshipParameterIndex;
+		this.ageIncrease = ageIncrease;
 	}
 
 	@Override
@@ -84,6 +86,11 @@ public class VriLayer extends BaseVdypLayer<VriSpecies, VriSite> implements Inpu
 		return empericalRelationshipParameterIndex;
 	}
 
+	
+	public float getAgeIncrease() {
+		return this.ageIncrease;
+	};
+	
 	/**
 	 * Accepts a configuration function that accepts a builder to configure.
 	 *
@@ -109,6 +116,9 @@ public class VriLayer extends BaseVdypLayer<VriSpecies, VriSite> implements Inpu
 
 	public static class Builder
 			extends BaseVdypLayer.Builder<VriLayer, VriSpecies, VriSite, VriSpecies.Builder, VriSite.Builder> {
+		
+		private static final float DEFAULT_AGE_INCREASE = 0;
+		
 		protected Optional<Float> crownClosure = Optional.empty();
 		protected Optional<Float> baseArea = Optional.empty();
 		protected Optional<Float> treesPerHectare = Optional.empty();
@@ -117,6 +127,7 @@ public class VriLayer extends BaseVdypLayer<VriSpecies, VriSite> implements Inpu
 		protected Optional<String> primaryGenus = Optional.empty();
 		protected Optional<String> secondaryGenus = Optional.empty();
 		protected Optional<Integer> empericalRelationshipParameterIndex = Optional.empty();
+		protected Optional<Float> ageIncrease = Optional.empty();
 
 		public Builder empiricalRelationshipParameterIndex(Optional<Integer> empiricalRelationshipParameterIndex) {
 			this.empericalRelationshipParameterIndex = empiricalRelationshipParameterIndex;
@@ -193,6 +204,11 @@ public class VriLayer extends BaseVdypLayer<VriSpecies, VriSite> implements Inpu
 		public Builder secondaryGenus(String secondaryGenus) {
 			return secondaryGenus(Optional.of(secondaryGenus));
 		}
+		
+		public Builder ageIncrease(float ageIncrease) {
+			this.ageIncrease = Optional.of(ageIncrease);
+			return this;
+		}
 
 		@Override
 		protected void check(Collection<String> errors) {
@@ -213,7 +229,8 @@ public class VriLayer extends BaseVdypLayer<VriSpecies, VriSite> implements Inpu
 					Math.max(utilization.get(), 7.5f), //
 					primaryGenus, //
 					secondaryGenus, //
-					empericalRelationshipParameterIndex
+					empericalRelationshipParameterIndex, //
+					ageIncrease.orElse(DEFAULT_AGE_INCREASE)
 			);
 			result.setInventoryTypeGroup(inventoryTypeGroup);
 			return result;

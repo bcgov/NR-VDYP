@@ -626,9 +626,8 @@ class ParsersTogetherTest {
 						hasProperty("layerType", is(LayerType.VETERAN)), //
 						hasProperty("crownClosure", is(88f)), //
 						hasProperty("utilization", is(8f)), //
-						hasProperty("baseArea", present(closeTo(expectedBaseArea))), hasProperty(
-								"treesPerHectare", present(closeTo(expectedTreesPerHectare))
-						)
+						hasProperty("baseArea", present(closeTo(expectedBaseArea))), //
+						hasProperty("treesPerHectare", present(closeTo(expectedTreesPerHectare)))
 				)
 		);
 

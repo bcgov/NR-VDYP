@@ -584,6 +584,10 @@ public class VdypMatchers {
 		return allOf(instanceOf(PolygonIdentifier.class), hasProperty("base", is(base)), hasProperty("year", is(year)));
 	}
 
+	public static Matcher<BecDefinition> isBec(String alias) {
+		return allOf(instanceOf(BecDefinition.class), hasProperty("alias", is(alias)));
+	}
+
 	public static Matcher<Coefficients>
 			utilization(float small, float all, float util1, float util2, float util3, float util4) {
 		return new TypeSafeDiagnosingMatcher<Coefficients>() {

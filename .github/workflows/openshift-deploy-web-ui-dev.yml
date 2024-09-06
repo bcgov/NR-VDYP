@@ -1,0 +1,52 @@
+name: Deploy web-ui to Openshift Dev
+on:
+  workflow_dispatch:
+    inputs:
+      TAG:
+        required: false
+        description: The docker image to deploy e.g. 1.0.0, 1.1.2, etc
+        type: string
+        default: latest
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: dev # read secrets from test environment in github.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy openshift yaml files
+        run: mkdir staging && cp openshift/vdyp-web-ui*.yaml staging/
+
+      - name: Fill yaml files
+        uses: cschleiden/replace-tokens@v1.2
+        with:
+          files: staging/**.yaml
+        env:
+          #Common variables
+          ENV: dev
+          NAMESPACE: ${{ vars.OC_NAMESPACE }}
+          TAG: ${{ inputs.TAG }}
+
+          #Frontend variables
+          ACTIVE_PORT: ${{ vars.TARGET_PORT }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+
+      - name: Authenticate and set context
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: ${{secrets.OPENSHIFT_SERVER_URL}}
+          openshift_token: ${{secrets.OC_TOKEN}}
+          namespace: ${{ vars.OC_NAMESPACE }}
+
+      - name: Apply .yaml files to openshift
+        run: |
+          for file in staging/*
+          do
+            oc apply -f "$file"
+          done

@@ -1,0 +1,17 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: vdyp-web-ui-route-#{ENV}#
+  namespace: "#{NAMESPACE}#"
+  labels: {}
+spec:
+  host: vdyp-ui-dev.apps.silver.devops.gov.bc.ca
+  to:
+    kind: Service
+    name: vdyp-web-ui-service-#{ENV}#
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+    destinationCACertificate: ""
+  port:
+    targetPort: #{ACTIVE_PORT}#

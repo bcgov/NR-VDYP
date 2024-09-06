@@ -1,10 +1,12 @@
 package ca.bc.gov.nrs.vdyp.vri;
 
-import static ca.bc.gov.nrs.vdyp.common_calculators.BaseAreaTreeDensityDiameter.quadMeanDiameter;
-import static ca.bc.gov.nrs.vdyp.common_calculators.BaseAreaTreeDensityDiameter.treesPerHectare;
+import static ca.bc.gov.nrs.vdyp.common_calculators.BaseAreaTreeDensityDiameter.*;
+import static ca.bc.gov.nrs.vdyp.math.FloatMath.pow;
+import static java.lang.Math.max;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.text.MessageFormat;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -36,6 +38,7 @@ import ca.bc.gov.nrs.vdyp.common.ControlKey;
 import ca.bc.gov.nrs.vdyp.common.EstimationMethods.Limits;
 import ca.bc.gov.nrs.vdyp.common.Utils;
 import ca.bc.gov.nrs.vdyp.common.ValueOrMarker;
+import ca.bc.gov.nrs.vdyp.common_calculators.BaseAreaTreeDensityDiameter;
 import ca.bc.gov.nrs.vdyp.common_calculators.SiteIndex2Height;
 import ca.bc.gov.nrs.vdyp.common_calculators.custom_exceptions.CommonCalculatorException;
 import ca.bc.gov.nrs.vdyp.common_calculators.enumerations.SiteIndexAgeType;
@@ -44,6 +47,7 @@ import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.io.parse.control.BaseControlParser;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParser;
 import ca.bc.gov.nrs.vdyp.math.FloatMath;
+import ca.bc.gov.nrs.vdyp.model.UtilizationClass;
 import ca.bc.gov.nrs.vdyp.model.BaseVdypSite;
 import ca.bc.gov.nrs.vdyp.model.BaseVdypSpecies;
 import ca.bc.gov.nrs.vdyp.model.BaseVdypSpecies.Builder;
@@ -74,6 +78,9 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 	static final Logger log = LoggerFactory.getLogger(VriStart.class);
 
 	static final float EMPOC = 0.85f;
+
+	static final float VETERAN_MIN_DQ = UtilizationClass.OVER225.lowBound;
+	static final float VETERAN_MIN_HL = 22.5f; // Seems odd that that the min height is the same as the min diameter
 
 	public static void main(final String... args) throws IOException {
 
@@ -393,6 +400,7 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 			}));
 			result.ifPresent(resultPoly -> {
 				var resultPrimaryLayer = resultPoly.getLayers().get(LayerType.PRIMARY);
+				var resultVeteranLayer = resultPoly.getLayers().get(LayerType.VETERAN);
 
 				try {
 					getDqBySpecies(resultPrimaryLayer, bec.getRegion());
@@ -403,6 +411,12 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 							bec, resultPrimaryLayer, VolumeComputeMode.BY_UTIL_WITH_WHOLE_STEM_BY_SPEC, CompatibilityVariableMode.NONE
 					);
 
+					if (resultVeteranLayer != null) {
+
+						// YUCV
+						computeUtilizationComponentsVeteran(resultVeteranLayer, bec);
+
+					}
 				} catch (ProcessingException e) {
 					throw new RuntimeProcessingException(e);
 				}
@@ -453,6 +467,11 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 
 			applyGroups(bec, vriSpec.getGenus(), sBuilder);
 
+			float fraction = primaryLayer.getSpecies().size() == 1 ? 1 : vriSpec.getFractionGenus();
+
+			float specBaseArea = primaryBaseArea * fraction;
+			sBuilder.baseArea(specBaseArea);
+
 			if (vriSite == primarySiteIn) {
 				sBuilder.loreyHeight(primaryHeight);
 
@@ -460,9 +479,9 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 				sBuilder.adaptSite(vriSite, (iBuilder, vriSite2) -> iBuilder.height(vriSite2.getHeight().get()));
 			} else {
 
-				float loreyHeight = vriSite.getHeight().filter((x) -> getDebugMode(2) == 1).map(height -> {
+				float loreyHeight = vriSite.getHeight().filter((x) -> getDebugMode(2) != 1).map(height -> {
 					float speciesQuadMeanDiameter = Math.max(7.5f, height / leadHeight * layerQuadMeanDiameter);
-					float speciesDensity = treesPerHectare(primaryBaseArea, speciesQuadMeanDiameter);
+					float speciesDensity = treesPerHectare(specBaseArea, speciesQuadMeanDiameter);
 					// EMP050 Method 1
 					return estimationMethods.primaryHeightFromLeadHeight(
 							vriSite.getHeight().get(), vriSite.getSiteGenus(), bec.getRegion(), speciesDensity
@@ -491,13 +510,12 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 		var species = lBuilder.getSpecies();
 
 		float sumBaseAreaLoreyHeight = 0;
-		// Assign BA by species
+		// find aggregate lorey height
 		if (species.size() == 1) {
-			species.get(0).getBaseAreaByUtilization().setAll(primaryBaseArea);
 			sumBaseAreaLoreyHeight = primaryBaseArea;
 		} else {
 			for (var spec : species) {
-				float specBaseArea = primaryBaseArea * spec.getFractionGenus();
+				float specBaseArea = spec.getBaseAreaByUtilization().getAll();
 				float specHeight = spec.getLoreyHeightByUtilization().getAll();
 				spec.getBaseAreaByUtilization().setAll(specBaseArea);
 				sumBaseAreaLoreyHeight += specBaseArea * specHeight;
@@ -631,11 +649,139 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 		return FloatMath.clamp(7.5f + (initialDq - 7.5f) * FloatMath.exp(x), min, max);
 	}
 
-	private void processVeteranLayer(VriPolygon polygon, VdypLayer.Builder lBuilder) throws StandProcessingException {
-		@SuppressWarnings("unused")
+	private float processVeteranLayer(VriPolygon polygon, VdypLayer.Builder lBuilder) throws StandProcessingException {
 		var veteranLayer = polygon.getLayers().get(LayerType.VETERAN);
+		lBuilder.layerType(LayerType.VETERAN);
 
-		// TODO
+		lBuilder.adapt(veteranLayer);
+		
+		var bec = polygon.getBiogeoclimaticZone();
+
+		var primarySite = veteranLayer.getPrimarySite();
+		var primarySpecies = veteranLayer.getPrimarySpeciesRecord();
+
+		float ageTotal = primarySite.flatMap(VriSite::getAgeTotal).map(at -> at + veteranLayer.getAgeIncrease())
+				.orElse(0f); // AGETOTLV
+		float yearsToBreastHeight = primarySite.flatMap(VriSite::getYearsToBreastHeight).orElse(0f); // YTBHLV
+		float dominantHeight = primarySite.flatMap(VriSite::getHeight).orElse(0f); // HDLV
+
+		var baseArea = veteranLayer.getBaseArea()
+				.orElseThrow(() -> new StandProcessingException("Expected veteran layer to have a base area")); // BA_V1
+		var treesPerHectare = veteranLayer.getTreesPerHectare()
+				.orElseThrow(() -> new StandProcessingException("Expected veteran layer to have a trees per hectare")); // TPH_V1
+
+		treesPerHectare = enforceMinimumDiameter(baseArea, treesPerHectare);
+
+		float inputTreesPerHectare = treesPerHectare; // TPHInput
+
+		if (baseArea <= 0) {
+			throw new StandProcessingException(
+					MessageFormat.format("Veteran layer base area ({0}) was not positive", baseArea)
+			);
+		}
+		if (treesPerHectare <= 0) {
+			throw new StandProcessingException(
+					MessageFormat.format("Veteran layer trees per hectare ({0}) was not positive", baseArea)
+			);
+		}
+		var quadMeanDiameter = BaseAreaTreeDensityDiameter.quadMeanDiameter(baseArea, treesPerHectare); // DQ(0,0)
+
+		lBuilder.adaptSpecies(veteranLayer, (sBuilder, spec) -> {
+			applyGroups(bec, spec.getGenus(), sBuilder);
+			if (primarySpecies.map(spec::equals).orElse(false)) {
+				sBuilder.addSite(iBuilder -> {
+					iBuilder.adapt(primarySite.get());
+					iBuilder.ageTotal(ageTotal);
+					iBuilder.yearsToBreastHeight(yearsToBreastHeight);
+				});
+			}
+			float specHeight = spec.getSite().flatMap(VriSite::getHeight).filter(x -> x > 0).orElse(dominantHeight);
+			float specBaseArea = spec.getFractionGenus() * baseArea;
+			float specQuadMeanDiameter = max(
+					estimateVeteranQuadMeanDiameter(spec.getGenus(), bec, specHeight), VETERAN_MIN_DQ
+			);
+			float specTreeDensity = BaseAreaTreeDensityDiameter.treesPerHectare(specBaseArea, specQuadMeanDiameter);
+			sBuilder.loreyHeight(specHeight);
+			sBuilder.baseArea(specBaseArea);
+			sBuilder.quadMeanDiameter(specQuadMeanDiameter);
+			sBuilder.treesPerHectare(specTreeDensity);
+		});
+
+		lBuilder.buildChildren();
+		var specList = lBuilder.getSpecies();
+
+		// Really crude reconciliation to the specified TPH (if any)
+		// Could improve with code similar to ROOTV01
+		if (treesPerHectare > 0) {
+			float tphSum = 0;
+			for (var spec : specList) {
+				tphSum += spec.getTreesPerHectareByUtilization().getAll();
+			}
+			float k = treesPerHectare / tphSum;
+			for (var spec : specList) {
+				float specBaseArea = spec.getBaseAreaByUtilization().getLarge();
+				float specTreesPerHectare = spec.getTreesPerHectareByUtilization().getLarge() * k;
+				float specQuadMeanDiameter = BaseAreaTreeDensityDiameter
+						.quadMeanDiameter(specBaseArea, specTreesPerHectare);
+				if (specQuadMeanDiameter < VETERAN_MIN_DQ) {
+					specQuadMeanDiameter = VETERAN_MIN_DQ;
+					specTreesPerHectare = BaseAreaTreeDensityDiameter
+							.treesPerHectare(specBaseArea, specQuadMeanDiameter);
+				}
+				spec.setTreesPerHectareByUtilization(Utils.utilizationVector(specTreesPerHectare));
+				spec.setQuadraticMeanDiameterByUtilization(Utils.utilizationVector(specQuadMeanDiameter));
+			}
+
+		}
+
+		// Sum BA and TPH
+		float tphSum = 0; // TPH(0,4)
+		float baSum = 0; // BA(0,4)
+		for (var spec : specList) {
+			tphSum += spec.getTreesPerHectareByUtilization().getAll();
+			baSum += spec.getBaseAreaByUtilization().getAll();
+		}
+
+		if (polygon.getMode().filter(mode -> mode == PolygonMode.BATC).isPresent()) {
+			// for mode 4 (with CC) input TPH was NOT available.
+			inputTreesPerHectare = tphSum;
+			treesPerHectare = tphSum;
+		}
+
+		return inputTreesPerHectare;
+	}
+
+	static final String MINIMUM_DIAMETER_BASE_MESSAGE = "Quadratic mean diameter {0} cm was lower than {1} cm";
+	static final String MINIMUM_DIAMETER_WARN_MESSAGE = MINIMUM_DIAMETER_BASE_MESSAGE
+			+ ", raising tree density to {2} trees/ha";
+	static final String MINIMUM_DIAMETER_FAIL_MESSAGE = MINIMUM_DIAMETER_BASE_MESSAGE + ".";
+
+	private Float enforceMinimumDiameter(Float baseArea, Float treesPerHectare) throws StandProcessingException {
+		final float quadMeanDiameter = BaseAreaTreeDensityDiameter.quadMeanDiameter(baseArea, treesPerHectare);
+		if (quadMeanDiameter < VETERAN_MIN_DQ) {
+			if (this.getId() == VdypApplicationIdentifier.VRI_START && this.getDebugMode(1) == 2) {
+				throw new StandProcessingException(
+						MessageFormat.format(MINIMUM_DIAMETER_FAIL_MESSAGE, quadMeanDiameter, VETERAN_MIN_DQ)
+				);
+			}
+			treesPerHectare = BaseAreaTreeDensityDiameter.treesPerHectare(baseArea, VETERAN_MIN_DQ);
+			log.atWarn().setMessage(MINIMUM_DIAMETER_WARN_MESSAGE).addArgument(treesPerHectare);
+		}
+		return treesPerHectare;
+	}
+
+	// EMP097 TODO move to EstimationMethods and this should probably be used in FipStart
+
+	float estimateVeteranQuadMeanDiameter(String sp0, BecDefinition bec, float loreyHeight) {
+		var vetDqMap = Utils.<MatrixMap2<String, Region, Coefficients>>expectParsedControl(
+				controlMap, ControlKey.VETERAN_LAYER_DQ, MatrixMap2.class
+		);
+		var coe = vetDqMap.get(sp0, bec.getRegion());
+		var a0 = coe.getCoe(1);
+		var a1 = coe.getCoe(2);
+		var a2 = coe.getCoe(3);
+
+		return a0 + a1 * pow(loreyHeight, a2);
 	}
 
 	// VRI_CHK
@@ -1102,6 +1248,7 @@ public class VriStart extends VdypStartApplication<VriPolygon, VriLayer, VriSpec
 							);
 
 						});
+						lBuilder.ageIncrease(inc.ageIncrease());
 					});
 				});
 			});

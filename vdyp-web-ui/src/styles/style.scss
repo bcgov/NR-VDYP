@@ -1,0 +1,113 @@
+$font-family: 'BCSans', 'Noto Sans', Verdana, Arial, sans-serif;
+
+// Apply the font-family globally
+html,
+body {
+  font-family: $font-family;
+}
+
+/* V-LIST */
+.v-list-item__prepend {
+  width: 32px !important; // Reduced the space between the prepend icon and text in the v-list
+}
+
+/* Button */
+.v-btn {
+  text-transform: none; // Disabled V-BTN text from being capitalized
+}
+
+/* Data Table */
+.v-data-table-footer {
+  padding-top: 20px; // Increased the spacing between table and pagination
+  justify-content: center !important; // Centered the data table pagination
+}
+
+.v-table__wrapper {
+  // Added table border lines
+  border-top: 1px solid #ddd;
+  border-left: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+}
+
+.data-table-even-row {
+  background-color: #f5f5f5;
+  border-left: 2px solid black;
+}
+
+.data-table-odd-row {
+  background-color: #ffffff;
+}
+
+/* LINK */
+.link-no-decoration {
+  // no decoration on link
+  text-decoration: none;
+  color: inherit;
+}
+
+.link-no-decoration:focus,
+.link-no-decoration:hover,
+.link-no-decoration:visited,
+.link-no-decoration:link,
+.link-no-decoration:active {
+  text-decoration: none;
+  color: inherit;
+}
+
+.v-card-title {
+  color: white;
+  background: #44608d;
+  border-bottom: 2px solid orange;
+  padding: 1rem !important;
+}
+
+// only for color='primary'
+.v-card-actions {
+  .text-primary.v-btn--variant-text {
+    background: #003366;
+    color: white !important;
+  }
+}
+
+/* etc */
+
+.fieldset {
+  border: 2px solid #39598b;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.legend {
+  padding: 0 8px;
+  font-weight: bold;
+  color: #39598b;
+}
+
+.readonly__text {
+  color: black;
+  font-size: 18px;
+}
+
+.readonly__label {
+  font-size: 13px;
+  color: #747474;
+}
+
+.search-label {
+  font-size: 14px;
+}
+
+.rounded-chip {
+  border-radius: 5px !important;
+}
+
+.dotted-divider {
+  border-top: 2px dotted #000;
+}
+
+.species-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}

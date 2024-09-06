@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'vdyp-web-ui/**'
-      - 'vdyp-api/**'
-      - 'vdyp-buildtools/migrations'
-
+      - "frontend/**"
+      - "backend/**"
+      - "migrations/**"
+      - "vdyp-web-ui/**"
 concurrency:
-  # Cancel in progress for PR open and close
-  group: ${{ github.event.number }}
+  # Cancel if re-attempted
+  group: ${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -20,13 +20,12 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        package: [vdyp-api/backend, vdyp-web-ui/frontend, vdyp-buildtools/migrations]
+        package: [backend, frontend, migrations, vdyp-web-ui]
     timeout-minutes: 10
     steps:
-      - uses: bcgov-nr/action-builder-ghcr@v2.0.2
+      - uses: bcgov-nr/action-builder-ghcr@v2.2.0
         with:
-          build_context: ${{ matrix.build_context }}
-          keep_versions: 10
+          keep_versions: 50
           package: ${{ matrix.package }}
           tag: ${{ github.event.number }}
           tag_fallback: latest
@@ -36,14 +35,13 @@ jobs:
   deploys:
     name: Deploys
     needs: [builds]
-    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.deployer.yml@v0.4.1
+    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.deployer.yml@v0.6.1
     secrets:
       oc_namespace: ${{ secrets.OC_NAMESPACE }}
       oc_token: ${{ secrets.OC_TOKEN }}
     with:
-      triggers: ('vdyp-api/backend/' 'vdyp-web-ui/frontend/' 'vdyp-tools/migrations/')
-      params:
-        --set global.secrets.persist=false
+      triggers: ('backend/' 'frontend/' 'migrations/' 'vdyp-web-ui/')
+      params: --set global.secrets.persist=false
 
   # tests:
   #   name: Tests

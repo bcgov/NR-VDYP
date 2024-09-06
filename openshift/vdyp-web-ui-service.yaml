@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vdyp-web-ui-service-#{ENV}#
+  namespace: "#{NAMESPACE}#"
+spec:
+  selector:
+    app: vdyp-web-ui-#{ENV}#
+  ports:
+    - protocol: TCP
+      port: #{ACTIVE_PORT}#
+      targetPort: #{ACTIVE_PORT}#

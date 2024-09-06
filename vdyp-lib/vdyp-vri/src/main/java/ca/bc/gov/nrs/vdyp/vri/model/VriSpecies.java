@@ -73,7 +73,8 @@ public class VriSpecies extends BaseVdypSpecies<VriSite> {
 				this.getPolygonIdentifier(), //
 				this.getLayerType(), //
 				this.getGenus(), //
-				this.getPercentGenus(), this.getSp64DistributionSet().getSp64DistributionList().stream()
+				this.getPercentGenus(), //
+				this.getSp64DistributionSet().getSp64DistributionList().stream()
 						.map(e -> String.format("%s: %s%%", e.getGenusAlias(), e.getPercentage()))
 						.collect(Collectors.joining(", "))
 		);

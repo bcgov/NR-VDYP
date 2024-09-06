@@ -1,0 +1,14 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: vdyp-web-ui-config-#{ENV}#
+  namespace: "#{NAMESPACE}#"
+  managedFields:
+    - manager: Mozilla
+      operation: Update
+      apiVersion: v1
+      time: "2024-04-15T22:11:17Z"
+      fieldsType: FieldsV1
+immutable: false
+data:
+  ACTIVE_PORT: "#{ACTIVE_PORT}#"

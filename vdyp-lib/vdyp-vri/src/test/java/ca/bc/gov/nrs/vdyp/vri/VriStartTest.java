@@ -1,12 +1,16 @@
 package ca.bc.gov.nrs.vdyp.vri;
 
+import static ca.bc.gov.nrs.vdyp.test.TestUtils.assertHasPrimaryLayer;
+import static ca.bc.gov.nrs.vdyp.test.TestUtils.assertHasVeteranLayer;
 import static ca.bc.gov.nrs.vdyp.test.TestUtils.assertOnlyPrimaryLayer;
 import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.closeTo;
 import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.coe;
+import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.isBec;
 import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.isPolyId;
 import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.notPresent;
 import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.present;
 import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.utilization;
+import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.utilizationAllAndBiggest;
 import static ca.bc.gov.nrs.vdyp.test.VdypMatchers.utilizationHeight;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.aMapWithSize;
@@ -2171,6 +2175,258 @@ class VriStartTest {
 							"closeUtilizationVolumeNetOfDecayWasteAndBreakageByUtilization", utilization(
 									0, 1.20897281f, 0.0223761573f, 0.441060275f, 0.358547896f, 0.386988521f
 							)
+					)
+			);
+
+			app.close();
+		}
+
+		@Test
+		void testProcessVeteran() throws Exception {
+
+			controlMap = TestUtils.loadControlMap();
+
+			VriStart app = new VriStart();
+
+			MockFileResolver resolver = dummyInput();
+
+			var poly = VriPolygon.build(pb -> {
+				pb.polygonIdentifier("TestPoly", 2024);
+				pb.biogeoclimaticZone(Utils.getBec("IDF", controlMap));
+				pb.yieldFactor(1.0f);
+				pb.forestInventoryZone("");
+				pb.percentAvailable(85);
+				pb.addLayer(lb -> {
+					lb.layerType(LayerType.PRIMARY);
+					lb.crownClosure(40.2f);
+					lb.utilization(7.5f);
+					lb.baseArea(47.0588226f);
+					lb.treesPerHectare(764.705872f);
+					lb.utilization(7.5f);
+
+					lb.inventoryTypeGroup(14);
+					lb.empiricalRelationshipParameterIndex(33);
+
+					lb.primaryGenus("C");
+					// 1 3
+					lb.addSpecies(sb -> {
+						sb.genus("B", controlMap);
+						sb.percentGenus(10);
+						sb.addSp64Distribution("BL", 100);
+						sb.addSite(ib -> {
+							ib.siteSpecies("BL");
+							ib.siteCurveNumber(8);
+						});
+					});
+
+					// 2 4 (Primary)
+					lb.addSpecies(sb -> {
+						sb.genus("C", controlMap);
+						sb.percentGenus(50);
+						sb.addSp64Distribution("CW", 100);
+						sb.addSite(ib -> {
+							ib.siteCurveNumber(11);
+							ib.ageTotal(100);
+							ib.height(20f);
+							ib.siteIndex(12f);
+							ib.yearsToBreastHeight(10.9f);
+							ib.breastHeightAge(89.1f);
+							ib.ageTotal(100f);
+							ib.siteSpecies("CW");
+						});
+					});
+
+					// 3 8
+					lb.addSpecies(sb -> {
+						sb.genus("H", controlMap);
+						sb.percentGenus(40);
+						sb.addSp64Distribution("HW", 100);
+						sb.addSite(ib -> {
+							ib.siteCurveNumber(37);
+							ib.height(25f);
+							ib.siteIndex(12.6f);
+							ib.yearsToBreastHeight(9.7f);
+							ib.breastHeightAge(90.3f);
+							ib.ageTotal(100f);
+							ib.siteSpecies("HW");
+						});
+					});
+
+				});
+				pb.addLayer(lb -> {
+					lb.layerType(LayerType.VETERAN);
+					lb.crownClosure(50.8f);
+					lb.utilization(7.5f);
+					lb.baseArea(20f);
+					lb.treesPerHectare(123f);
+					lb.utilization(7.5f);
+
+					lb.inventoryTypeGroup(14);
+					// lb.empiricalRelationshipParameterIndex(33);
+
+					lb.primaryGenus("H"); // 3
+					// 1 3
+					lb.addSpecies(sb -> {
+						sb.genus("B", controlMap);
+						sb.percentGenus(20);
+						sb.addSp64Distribution("BL", 100);
+						sb.addSite(ib -> {
+							ib.siteSpecies("BL");
+							ib.siteCurveNumber(8);
+						});
+					});
+
+					// 2 4
+					lb.addSpecies(sb -> {
+						sb.genus("C", controlMap);
+						sb.percentGenus(30);
+						sb.addSp64Distribution("CW", 100);
+						sb.addSite(ib -> {
+							ib.siteCurveNumber(11);
+							ib.ageTotal(100);
+							ib.height(30f);
+							ib.siteIndex(14.3f);
+							ib.yearsToBreastHeight(10.9f);
+							ib.breastHeightAge(189.1f);
+							ib.ageTotal(200f);
+							ib.siteSpecies("CW");
+						});
+					});
+
+					// 3 8 (Primary)
+					lb.addSpecies(sb -> {
+						sb.genus("H", controlMap);
+						sb.percentGenus(50);
+						sb.addSp64Distribution("HW", 100);
+						sb.addSite(ib -> {
+							ib.siteCurveNumber(37);
+							ib.height(34f);
+							ib.siteIndex(14.6f);
+							ib.yearsToBreastHeight(9.7f);
+							ib.breastHeightAge(190.3f);
+							ib.ageTotal(200f);
+							ib.siteSpecies("HW");
+						});
+					});
+
+				});
+			});
+
+			app.init(resolver, controlMap);
+
+			var result = app.processPolygon(0, poly).get();
+
+			assertThat(result, hasProperty("polygonIdentifier", isPolyId("TestPoly", 2024)));
+			assertThat(result, hasProperty("biogeoclimaticZone", isBec("IDF")));
+			assertThat(result, hasProperty("forestInventoryZone", blankString()));
+			assertThat(result, hasProperty("mode", present(is(PolygonMode.START))));
+			assertThat(result, hasProperty("percentAvailable", is(85f)));
+
+			var primaryLayer = assertHasPrimaryLayer(result);
+
+			assertThat(primaryLayer, hasProperty("ageTotal", present(closeTo(100))));
+			assertThat(primaryLayer, hasProperty("breastHeightAge", present(closeTo(89.1f))));
+			assertThat(primaryLayer, hasProperty("yearsToBreastHeight", present(closeTo(10.9f))));
+
+			assertThat(primaryLayer, hasProperty("siteGenus", present(is("C"))));
+
+			assertThat(primaryLayer, hasProperty("height", present(closeTo(20f))));
+			assertThat(primaryLayer, hasProperty("inventoryTypeGroup", present(is(14))));
+			assertThat(primaryLayer, hasProperty("empiricalRelationshipParameterIndex", present(is(33))));
+
+			assertThat(
+					primaryLayer, hasProperty("loreyHeightByUtilization", utilizationHeight(5.45770216f, 21.0985336f))
+			);
+			assertThat(
+					primaryLayer,
+					hasProperty(
+							"baseAreaByUtilization",
+							utilization(0.0787888616f, 47.0588226f, 0.787343979f, 2.33701372f, 3.97268224f, 39.9617844f)
+					)
+			);
+			assertThat(
+					primaryLayer,
+					hasProperty(
+							"quadraticMeanDiameterByUtilization",
+							utilization(5.89174175f, 27.9916744f, 9.26363468f, 14.1112642f, 18.8414402f, 37.8068199f)
+					)
+			);
+			assertThat(
+					primaryLayer,
+					hasProperty(
+							"treesPerHectareByUtilization",
+							utilization(28.8993168f, 764.704102f, 116.818542f, 149.430603f, 142.483887f, 355.971069f)
+					)
+			);
+
+			assertThat(
+					primaryLayer,
+					hasProperty(
+							"closeUtilizationVolumeNetOfDecayWasteAndBreakageByUtilization",
+							utilization(0, 252.98407f, 0.0354338735f, 4.66429567f, 14.5271645f, 233.757172f)
+					)
+			);
+			assertThat(primaryLayer.getSpecies(), allOf(aMapWithSize(3), hasKey("B"), hasKey("C"), hasKey("H")));
+
+			var veteranLayer = assertHasVeteranLayer(result);
+
+			VdypSpecies resultSpecB = TestUtils.assertHasSpecies(veteranLayer, "B", "C", "H");
+
+			assertThat(resultSpecB, hasProperty("loreyHeightByUtilization", utilizationHeight(0f, 34f)));
+			assertThat(resultSpecB, hasProperty("baseAreaByUtilization", utilizationAllAndBiggest(4f)));
+			assertThat(
+					resultSpecB,
+					hasProperty("quadraticMeanDiameterByUtilization", utilizationAllAndBiggest(45.8757401f))
+			);
+			assertThat(resultSpecB, hasProperty("treesPerHectareByUtilization", utilizationAllAndBiggest(24.1993656f)));
+
+			assertThat(resultSpecB, hasProperty("wholeStemVolumeByUtilization", utilizationAllAndBiggest(47.5739288f)));
+			assertThat(
+					resultSpecB,
+					hasProperty("closeUtilizationVolumeByUtilization", utilizationAllAndBiggest(45.9957237f))
+			);
+			assertThat(
+					resultSpecB,
+					hasProperty("closeUtilizationVolumeNetOfDecayByUtilization", utilizationAllAndBiggest(39.5351295f))
+			);
+			assertThat(
+					resultSpecB,
+					hasProperty(
+							"closeUtilizationVolumeNetOfDecayAndWasteByUtilization",
+							utilizationAllAndBiggest(37.830616f)
+					)
+			);
+			assertThat(
+					resultSpecB,
+					hasProperty(
+							"closeUtilizationVolumeNetOfDecayWasteAndBreakageByUtilization",
+							utilizationAllAndBiggest(36.8912659f)
+					)
+			);
+
+			assertThat(veteranLayer, hasProperty("ageTotal", present(closeTo(200))));
+			assertThat(veteranLayer, hasProperty("breastHeightAge", present(closeTo(190.3f))));
+			assertThat(veteranLayer, hasProperty("yearsToBreastHeight", present(closeTo(9.7f))));
+
+			assertThat(veteranLayer, hasProperty("siteGenus", present(is("H"))));
+
+			assertThat(veteranLayer, hasProperty("height", present(closeTo(34f))));
+			assertThat(veteranLayer, hasProperty("inventoryTypeGroup", present(is(14)))); // ?
+			assertThat(veteranLayer, hasProperty("empiricalRelationshipParameterIndex", notPresent())); // ?
+
+			assertThat(veteranLayer, hasProperty("loreyHeightByUtilization", utilizationHeight(0f, 32.8f)));
+			assertThat(veteranLayer, hasProperty("baseAreaByUtilization", utilizationAllAndBiggest(20f)));
+			assertThat(
+					veteranLayer,
+					hasProperty("quadraticMeanDiameterByUtilization", utilizationAllAndBiggest(45.5006409f))
+			);
+			assertThat(veteranLayer, hasProperty("treesPerHectareByUtilization", utilizationAllAndBiggest(123f)));
+
+			assertThat(
+					veteranLayer,
+					hasProperty(
+							"closeUtilizationVolumeNetOfDecayWasteAndBreakageByUtilization",
+							utilizationAllAndBiggest(167.61972f)
 					)
 			);
 
