@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import ca.bc.gov.nrs.vdyp.application.ProcessingException;
 import ca.bc.gov.nrs.vdyp.common.ControlKey;
-import ca.bc.gov.nrs.vdyp.forward.test.VdypForwardTestUtils;
+import ca.bc.gov.nrs.vdyp.forward.test.ForwardTestUtils;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.model.GenusDefinitionMap;
 import ca.bc.gov.nrs.vdyp.model.LayerType;
@@ -37,7 +37,7 @@ class BankTest {
 	void before() throws IOException, ResourceParseException {
 
 		parser = new ForwardControlParser();
-		controlMap = VdypForwardTestUtils.parse(parser, "VDYP.CTR");
+		controlMap = ForwardTestUtils.parse(parser, "VDYP.CTR");
 		assertThat(controlMap, (Matcher) controlMapHasEntry(ControlKey.SP0_DEF, instanceOf(GenusDefinitionMap.class)));
 	}
 
@@ -114,6 +114,7 @@ class BankTest {
 
 		Bank bank = new Bank(pLayer, polygon.getBiogeoclimaticZone(), s -> true);
 
+		pLayer = ForwardTestUtils.normalizeLayer(pLayer);
 		verifyBankMatchesLayer(bank, pLayer);
 
 		Bank ppsCopy = bank.copy();
@@ -164,6 +165,7 @@ class BankTest {
 
 		Bank bankCopy = new Bank(bank);
 
+		pLayer = ForwardTestUtils.normalizeLayer(pLayer);
 		verifyBankMatchesLayer(bankCopy, pLayer);
 	}
 
@@ -179,18 +181,18 @@ class BankTest {
 
 		Bank bank = new Bank(pLayer, polygon.getBiogeoclimaticZone(), s -> true);
 
-		VdypLayer currentLayer = bank.getLayer();
+		pLayer = ForwardTestUtils.normalizeLayer(pLayer);
 
-		verifyBankMatchesLayer(bank, currentLayer);
+		verifyBankMatchesLayer(bank, pLayer);
 
-		UtilizationVector uv = currentLayer.getBaseAreaByUtilization();
+		UtilizationVector uv = pLayer.getBaseAreaByUtilization();
 		float newValue = uv.get(UtilizationClass.ALL) + 1.0f;
 		uv.set(UtilizationClass.ALL, newValue);
-		currentLayer.setBaseAreaByUtilization(uv);
+		pLayer.setBaseAreaByUtilization(uv);
 
-		bank.refreshBank(currentLayer);
+		bank.refreshBank(pLayer);
 
-		verifyBankMatchesLayer(bank, currentLayer);
+		verifyBankMatchesLayer(bank, pLayer);
 	}
 
 	private void verifyBankMatchesLayer(Bank lps, VdypLayer layer) {

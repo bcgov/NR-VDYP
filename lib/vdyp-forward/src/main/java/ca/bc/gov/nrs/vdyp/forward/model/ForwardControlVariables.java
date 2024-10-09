@@ -46,6 +46,12 @@ import ca.bc.gov.nrs.vdyp.io.parse.value.ValueParseException;
  * <li>0: No
  * <li>1: Yes (normal)
  * </ul>
+ * 7th: Checkpoint growth. Polygons are written to the output files after each step of the grow process. The final write
+ * for a given year is the result of growth for that year; the others are all intermediate.
+ * <ul>
+ * <li>0: No
+ * <li>1: Yes (normal)
+ * </ul>
  */
 public class ForwardControlVariables {
 
@@ -133,7 +139,7 @@ public class ForwardControlVariables {
 
 	public boolean allowCalculation(float value, float limit, BiFunction<Float, Float, Boolean> p) {
 		int cvValue = controlVariables[ControlVariable.ALLOW_COMPAT_VAR_CALCS_5.ordinal()];
-		return cvValue == 0 && value > 0 || cvValue == 1 && p.apply(value, limit);
+		return cvValue == 0 && value > 0 || cvValue > 0 && p.apply(value, limit);
 	}
 
 	public boolean allowCalculation(BooleanSupplier p) {
@@ -145,6 +151,18 @@ public class ForwardControlVariables {
 
 		assert controlVariable.ordinal() == controlVariable.variableNumber - 1;
 		return controlVariables[controlVariable.ordinal()];
+	}
+
+	/**
+	 * Explicitly set a control variable value. To be used by unit tests only.
+	 *
+	 * @param controlVariable the variable to set
+	 * @param value           its new value
+	 * @throws ValueParseException
+	 */
+	public void setControlVariable(ControlVariable controlVariable, int value) throws ValueParseException {
+		controlVariables[controlVariable.ordinal()] = value;
+		validate();
 	}
 
 	int getControlVariable(int elementNumber) {

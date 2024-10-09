@@ -4,7 +4,6 @@ import java.util.Map;
 import java.util.Optional;
 
 import ca.bc.gov.nrs.vdyp.common.ControlKey;
-import ca.bc.gov.nrs.vdyp.common.Utils;
 import ca.bc.gov.nrs.vdyp.common_calculators.enumerations.SiteIndexEquation;
 import ca.bc.gov.nrs.vdyp.controlmap.CachingResolvedControlMapImpl;
 import ca.bc.gov.nrs.vdyp.forward.model.ForwardControlVariables;
@@ -21,141 +20,141 @@ import ca.bc.gov.nrs.vdyp.model.Region;
 
 public class ForwardResolvedControlMapImpl extends CachingResolvedControlMapImpl implements ForwardResolvedControlMap {
 
-	private final ForwardDebugSettings debugSettings;
-	private final ForwardControlVariables forwardControlVariables;
-	private final MatrixMap2<String, Region, SiteIndexEquation> siteCurveMap;
-	private final CompVarAdjustments compVarAdjustments;
-	private final MatrixMap2<String, String, Coefficients> basalAreaYieldCoefficients;
-	private final Map<Region, GrowthFiatDetails> basalAreaGrowthFiatDetails;
-	private final MatrixMap2<String, String, Coefficients> basalAreaGrowthEmpiricalCoefficients;
-	private final MatrixMap3<Region, String, Integer, Float> upperBoundCoefficients;
-	private final MatrixMap2<String, String, Coefficients> quadMeanDiameterYieldCoefficients;
-	private final Map<Region, GrowthFiatDetails> quadMeanDiameterGrowthFiatDetails;
-	private final Map<Integer, Coefficients> quadMeanDiameterGrowthEmpiricalCoefficients;
-	private final Map<Integer, Coefficients> quadMeanDiameterGrowthEmpiricalLimits;
-	private final MatrixMap2<String, Region, Coefficients> loreyHeightPrimarySpeciesEquationP1Coefficients;
-	private final MatrixMap3<String, String, Region, Optional<NonprimaryHLCoefficients>> loreyHeightNonPrimaryCoefficients;
-	private final Map<Integer, ModelCoefficients> primarySpeciesBasalAreaGrowthCoefficients;
-	private final MatrixMap2<String, Integer, Optional<Coefficients>> nonPrimarySpeciesBasalAreaGrowthCoefficients;
-	private final Map<Integer, ModelCoefficients> primaryQuadMeanDiameterGrowthCoefficients;
-	private final MatrixMap2<String, Integer, Optional<Coefficients>> nonPrimaryQuadMeanDiameterGrowthCoefficients;
+	private final Optional<ForwardDebugSettings> debugSettings;
+	private final Optional<ForwardControlVariables> forwardControlVariables;
+	private final Optional<MatrixMap2<String, Region, SiteIndexEquation>> siteCurveMap;
+	private final Optional<CompVarAdjustments> compVarAdjustments;
+	private final Optional<MatrixMap2<String, String, Coefficients>> basalAreaYieldCoefficients;
+	private final Optional<Map<Region, GrowthFiatDetails>> basalAreaGrowthFiatDetails;
+	private final Optional<MatrixMap2<String, String, Coefficients>> basalAreaGrowthEmpiricalCoefficients;
+	private final Optional<MatrixMap3<Region, String, Integer, Float>> upperBoundCoefficients;
+	private final Optional<MatrixMap2<String, String, Coefficients>> quadMeanDiameterYieldCoefficients;
+	private final Optional<Map<Region, GrowthFiatDetails>> quadMeanDiameterGrowthFiatDetails;
+	private final Optional<Map<Integer, Coefficients>> quadMeanDiameterGrowthEmpiricalCoefficients;
+	private final Optional<Map<Integer, Coefficients>> quadMeanDiameterGrowthEmpiricalLimits;
+	private final Optional<MatrixMap2<String, Region, Coefficients>> loreyHeightPrimarySpeciesEquationP1Coefficients;
+	private final Optional<MatrixMap3<String, String, Region, Optional<NonprimaryHLCoefficients>>> loreyHeightNonPrimaryCoefficients;
+	private final Optional<Map<Integer, ModelCoefficients>> primarySpeciesBasalAreaGrowthCoefficients;
+	private final Optional<MatrixMap2<String, Integer, Optional<Coefficients>>> nonPrimarySpeciesBasalAreaGrowthCoefficients;
+	private final Optional<Map<Integer, ModelCoefficients>> primaryQuadMeanDiameterGrowthCoefficients;
+	private final Optional<MatrixMap2<String, Integer, Optional<Coefficients>>> nonPrimaryQuadMeanDiameterGrowthCoefficients;
 
 	public ForwardResolvedControlMapImpl(Map<String, Object> controlMap) {
 
 		super(controlMap);
 
-		this.debugSettings = new ForwardDebugSettings(get(ControlKey.DEBUG_SWITCHES, DebugSettings.class));
+		this.debugSettings = get(ControlKey.DEBUG_SWITCHES, DebugSettings.class).map(m -> new ForwardDebugSettings(m));
 		this.forwardControlVariables = get(ControlKey.VTROL, ForwardControlVariables.class);
-		this.siteCurveMap = Utils.expectParsedControl(controlMap, ControlKey.SITE_CURVE_NUMBERS, MatrixMap2.class);
-		this.compVarAdjustments = this.get(ControlKey.PARAM_ADJUSTMENTS, CompVarAdjustments.class);
-		this.basalAreaYieldCoefficients = this.get(ControlKey.BA_YIELD, MatrixMap2.class);
-		this.basalAreaGrowthFiatDetails = this.get(ControlKey.BA_GROWTH_FIAT, Map.class);
-		this.basalAreaGrowthEmpiricalCoefficients = this.get(ControlKey.BA_GROWTH_EMPIRICAL, MatrixMap2.class);
-		this.upperBoundCoefficients = this.get(ControlKey.UPPER_BA_BY_CI_S0_P, MatrixMap3.class);
-		this.quadMeanDiameterYieldCoefficients = this.get(ControlKey.DQ_YIELD, MatrixMap2.class);
-		this.quadMeanDiameterGrowthFiatDetails = this.get(ControlKey.DQ_GROWTH_FIAT, Map.class);
-		this.quadMeanDiameterGrowthEmpiricalCoefficients = this.get(ControlKey.DQ_GROWTH_EMPIRICAL, Map.class);
-		this.quadMeanDiameterGrowthEmpiricalLimits = this.get(ControlKey.DQ_GROWTH_EMPIRICAL_LIMITS, Map.class);
+		this.siteCurveMap = get(ControlKey.SITE_CURVE_NUMBERS, MatrixMap2.class);
+		this.compVarAdjustments = get(ControlKey.PARAM_ADJUSTMENTS, CompVarAdjustments.class);
+		this.basalAreaYieldCoefficients = get(ControlKey.BA_YIELD, MatrixMap2.class);
+		this.basalAreaGrowthFiatDetails = get(ControlKey.BA_GROWTH_FIAT, Map.class);
+		this.basalAreaGrowthEmpiricalCoefficients = get(ControlKey.BA_GROWTH_EMPIRICAL, MatrixMap2.class);
+		this.upperBoundCoefficients = get(ControlKey.UPPER_BA_BY_CI_S0_P, MatrixMap3.class);
+		this.quadMeanDiameterYieldCoefficients = get(ControlKey.DQ_YIELD, MatrixMap2.class);
+		this.quadMeanDiameterGrowthFiatDetails = get(ControlKey.DQ_GROWTH_FIAT, Map.class);
+		this.quadMeanDiameterGrowthEmpiricalCoefficients = get(ControlKey.DQ_GROWTH_EMPIRICAL, Map.class);
+		this.quadMeanDiameterGrowthEmpiricalLimits = get(ControlKey.DQ_GROWTH_EMPIRICAL_LIMITS, Map.class);
 		this.loreyHeightPrimarySpeciesEquationP1Coefficients = this
 				.get(ControlKey.HL_PRIMARY_SP_EQN_P1, MatrixMap2.class);
-		this.loreyHeightNonPrimaryCoefficients = this.get(ControlKey.HL_NONPRIMARY, MatrixMap3.class);
-		this.primarySpeciesBasalAreaGrowthCoefficients = this.get(ControlKey.PRIMARY_SP_BA_GROWTH, Map.class);
+		this.loreyHeightNonPrimaryCoefficients = get(ControlKey.HL_NONPRIMARY, MatrixMap3.class);
+		this.primarySpeciesBasalAreaGrowthCoefficients = get(ControlKey.PRIMARY_SP_BA_GROWTH, Map.class);
 		this.nonPrimarySpeciesBasalAreaGrowthCoefficients = this
 				.get(ControlKey.NON_PRIMARY_SP_BA_GROWTH, MatrixMap2.class);
-		this.primaryQuadMeanDiameterGrowthCoefficients = this.get(ControlKey.PRIMARY_SP_DQ_GROWTH, Map.class);
+		this.primaryQuadMeanDiameterGrowthCoefficients = get(ControlKey.PRIMARY_SP_DQ_GROWTH, Map.class);
 		this.nonPrimaryQuadMeanDiameterGrowthCoefficients = this
 				.get(ControlKey.NON_PRIMARY_SP_DQ_GROWTH, MatrixMap2.class);
 	}
 
 	@Override
 	public ForwardDebugSettings getDebugSettings() {
-		return debugSettings;
+		return debugSettings.orElseThrow();
 	}
 
 	@Override
 	public ForwardControlVariables getForwardControlVariables() {
-		return forwardControlVariables;
+		return forwardControlVariables.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap2<String, Region, SiteIndexEquation> getSiteCurveMap() {
-		return siteCurveMap;
+		return siteCurveMap.orElseThrow();
 	}
 
 	@Override
 	public CompVarAdjustments getCompVarAdjustments() {
-		return compVarAdjustments;
+		return compVarAdjustments.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap2<String, String, Coefficients> getBasalAreaYieldCoefficients() {
-		return basalAreaYieldCoefficients;
+		return basalAreaYieldCoefficients.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap2<String, String, Coefficients> getQuadMeanDiameterYieldCoefficients() {
-		return quadMeanDiameterYieldCoefficients;
+		return quadMeanDiameterYieldCoefficients.orElseThrow();
 	}
 
 	@Override
 	public Map<Region, GrowthFiatDetails> getBasalAreaGrowthFiatDetails() {
-		return basalAreaGrowthFiatDetails;
+		return basalAreaGrowthFiatDetails.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap2<String, String, Coefficients> getBasalAreaGrowthEmpiricalCoefficients() {
-		return basalAreaGrowthEmpiricalCoefficients;
+		return basalAreaGrowthEmpiricalCoefficients.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap3<Region, String, Integer, Float> getUpperBoundsCoefficients() {
-		return upperBoundCoefficients;
+		return upperBoundCoefficients.orElseThrow();
 	}
 
 	@Override
 	public Map<Region, GrowthFiatDetails> getQuadMeanDiameterGrowthFiatDetails() {
-		return quadMeanDiameterGrowthFiatDetails;
+		return quadMeanDiameterGrowthFiatDetails.orElseThrow();
 	}
 
 	@Override
 	public Map<Integer, Coefficients> getQuadMeanDiameterGrowthEmpiricalCoefficients() {
-		return quadMeanDiameterGrowthEmpiricalCoefficients;
+		return quadMeanDiameterGrowthEmpiricalCoefficients.orElseThrow();
 	}
 
 	@Override
 	public Map<Integer, Coefficients> getQuadMeanDiameterGrowthEmpiricalLimits() {
-		return quadMeanDiameterGrowthEmpiricalLimits;
+		return quadMeanDiameterGrowthEmpiricalLimits.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap2<String, Region, Coefficients> getLoreyHeightPrimarySpeciesEquationP1Coefficients() {
-		return loreyHeightPrimarySpeciesEquationP1Coefficients;
+		return loreyHeightPrimarySpeciesEquationP1Coefficients.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap3<String, String, Region, Optional<NonprimaryHLCoefficients>>
 			getLoreyHeightNonPrimaryCoefficients() {
-		return loreyHeightNonPrimaryCoefficients;
+		return loreyHeightNonPrimaryCoefficients.orElseThrow();
 	}
 
 	@Override
 	public Map<Integer, ModelCoefficients> getPrimarySpeciesBasalAreaGrowthCoefficients() {
-		return primarySpeciesBasalAreaGrowthCoefficients;
+		return primarySpeciesBasalAreaGrowthCoefficients.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap2<String, Integer, Optional<Coefficients>> getNonPrimarySpeciesBasalAreaGrowthCoefficients() {
-		return nonPrimarySpeciesBasalAreaGrowthCoefficients;
+		return nonPrimarySpeciesBasalAreaGrowthCoefficients.orElseThrow();
 	}
 
 	@Override
 	public Map<Integer, ModelCoefficients> getPrimarySpeciesQuadMeanDiameterGrowthCoefficients() {
-		return primaryQuadMeanDiameterGrowthCoefficients;
+		return primaryQuadMeanDiameterGrowthCoefficients.orElseThrow();
 	}
 
 	@Override
 	public MatrixMap2<String, Integer, Optional<Coefficients>>
 			getNonPrimarySpeciesQuadMeanDiameterGrowthCoefficients() {
-		return nonPrimaryQuadMeanDiameterGrowthCoefficients;
+		return nonPrimaryQuadMeanDiameterGrowthCoefficients.orElseThrow();
 	}
 }

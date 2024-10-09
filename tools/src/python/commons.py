@@ -18,7 +18,7 @@ def find_file(file_name):
     if not file_name.endswith('.for'):
         file_name = file_name + '.for'
 
-    folders = [utils.get_source_folder()]
+    folders = [util.get_source_folder()]
     source_file = None
     while source_file is None and len(folders) > 0:
         current_directory = folders.pop()

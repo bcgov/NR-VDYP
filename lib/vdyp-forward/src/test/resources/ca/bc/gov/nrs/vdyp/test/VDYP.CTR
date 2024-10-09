@@ -24,6 +24,7 @@
 022 coe/BGRP.DAT                                      Defines Breakage Groups   RD_BGRP      IPSJF157
 
 025 coe/SIEQN.PRM                                     Site Curve Numbers assigned
+025                                                   Nullifies above siteCurve #
 026 coe/SIAGEMAX.PRM                                  MAXIMUM AGES FOR HT INCR, BY SITE CURVE NUMBER (SIAGEMAX.prm=140)
 028 coe/CVADJ.PRM                                     CV adjustment and relalted parameters
 
@@ -59,7 +60,7 @@
 096 coe/VETVOL1.DAT                                   Vet-layer volume adjust    RD_YVET                         
 097 coe/VETDQ2.DAT                                    DQ for Vet layer           RD_YDQV
 
-101   -1   1   2   2   1   1                          Contol variables (10I4)
+101   -1   1   2   3   1   1                          Control variables (10I4)
                                                         1st 4 col: IYR_CNTR =i   i=0 for NO GROWTH 
                                                               -1 to use SEQ014 (specifies end yr, each poly)
                                                             i =1 to 400  grow i yrs                               

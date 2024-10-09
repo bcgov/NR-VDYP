@@ -3530,10 +3530,11 @@ class SindxdllTest {
 		}
 
 		@Test
-		void testNoConversionDefined() throws CommonCalculatorException {
+		void testSameSpeciesYieldsNoConversionDefined() throws CommonCalculatorException {
 			Reference<Double> resultSiteIndex = new Reference<>();
-			Sindxdll.SIToSI(SI_SPEC_AT, 10.0, SI_SPEC_AT, resultSiteIndex);
-			assertEquals(10.0f, resultSiteIndex.get());
+			assertThrows(NoAnswerException.class, () -> {
+				Sindxdll.SIToSI(SI_SPEC_AT, 10.0, SI_SPEC_AT, resultSiteIndex);
+			});
 		}
 	}
 

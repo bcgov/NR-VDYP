@@ -133,6 +133,7 @@ public class EstimationMethods {
 	 *
 	 * @param vspec         The species.
 	 * @param vspecPrime    The primary species.
+	 * @param bec           The BEC zone containing the species.
 	 * @param leadHeight    lead height of the layer
 	 * @param primaryHeight height of the primary species
 	 * @throws ProcessingException
@@ -547,7 +548,7 @@ public class EstimationMethods {
 			UtilizationVector wholeStemVolumeUtil
 	) throws ProcessingException {
 		var wholeStemUtilizationComponentMap = controlMap.getWholeStemUtilizationComponentMap();
-		var dqSp = quadMeanDiameterUtil.getAll();
+		var spDqAll = quadMeanDiameterUtil.getAll();
 
 		estimateUtilization(baseAreaUtil, wholeStemVolumeUtil, utilizationClass, (uc, ba) -> {
 			Coefficients wholeStemCoe = wholeStemUtilizationComponentMap.get(uc.index, volumeGroup).orElseThrow(
@@ -564,7 +565,7 @@ public class EstimationMethods {
 			var a3 = wholeStemCoe.getCoe(3);
 
 			var arg = a0 + a1 * log(hlSp) + a2 * log(quadMeanDiameterUtil.getCoe(uc.index))
-					+ ( (uc != UtilizationClass.OVER225) ? a3 * log(dqSp) : a3 * dqSp);
+					+ ( (uc != UtilizationClass.OVER225) ? a3 * log(spDqAll) : a3 * spDqAll);
 
 			if (uc == utilizationClass) {
 				arg += adjustCloseUtil;
@@ -805,7 +806,7 @@ public class EstimationMethods {
 	 * EMP106 - estimate basal area yield for the primary layer (from IPSJF160.doc)
 	 *
 	 * @param estimateBasalAreaYieldCoefficients estimate basal area yield coefficients
-	 * @param controlVariable2Setting            the value of control variable 2
+	 * @param debugSetting2Value                 the value of debug setting 2
 	 * @param dominantHeight                     dominant height (m)
 	 * @param breastHeightAge                    breast height age (years)
 	 * @param veteranBaseArea                    basal area of overstory (>= 0)
@@ -816,7 +817,7 @@ public class EstimationMethods {
 	 * @throws StandProcessingException
 	 */
 	public float estimateBaseAreaYield(
-			Coefficients estimateBasalAreaYieldCoefficients, int controlVariable2Setting, float dominantHeight,
+			Coefficients estimateBasalAreaYieldCoefficients, int debugSetting2Value, float dominantHeight,
 			float breastHeightAge, Optional<Float> veteranBasalArea, boolean fullOccupancy, float upperBoundBasalArea
 	) throws StandProcessingException {
 
@@ -838,8 +839,8 @@ public class EstimationMethods {
 
 		float ageToUse = breastHeightAge;
 
-		if (controlVariable2Setting > 0) {
-			ageToUse = Math.min(ageToUse, controlVariable2Setting * 100f);
+		if (debugSetting2Value > 0) {
+			ageToUse = Math.min(ageToUse, debugSetting2Value * 100f);
 		}
 
 		if (ageToUse <= 0f) {
@@ -888,7 +889,7 @@ public class EstimationMethods {
 	 * @throws StandProcessingException in the event of a processing error
 	 */
 	public float estimateQuadMeanDiameterYield(
-			Coefficients coefficients, int controlVariable2Setting, float dominantHeight, float breastHeightAge,
+			Coefficients coefficients, int debugVariable2Value, float dominantHeight, float breastHeightAge,
 			Optional<Float> veteranBaseArea, float upperBoundQuadMeanDiameter
 	) throws StandProcessingException {
 
@@ -896,7 +897,10 @@ public class EstimationMethods {
 			return 7.6f;
 		}
 
-		final float ageUse = breastHeightAge;
+		float ageUse = breastHeightAge;
+		if (debugVariable2Value > 0) {
+			ageUse = Math.min(ageUse, debugVariable2Value * 100.0f);
+		}
 
 		if (ageUse <= 0f) {
 			throw new StandProcessingException("Primary breast height age must be positive but was " + ageUse);
@@ -908,8 +912,8 @@ public class EstimationMethods {
 		final float c1 = Math.max(coefficients.getCoe(1) + coefficients.getCoe(2) * trAge, 0f);
 		final float c2 = Math.max(coefficients.getCoe(3) + coefficients.getCoe(4) * trAge, 0f);
 
-		float dq = c0 + c1 * FloatMath.pow(dominantHeight - 5f, c2);
-
+		float dq = c0 + c1 * FloatMath.pow(dominantHeight - 5f, c2)
+				* FloatMath.exp(veteranBaseArea.orElse(0.0f) * coefficients.getCoe(5));
 		return FloatMath.clamp(dq, 7.6f, upperBoundQuadMeanDiameter);
 	}
 

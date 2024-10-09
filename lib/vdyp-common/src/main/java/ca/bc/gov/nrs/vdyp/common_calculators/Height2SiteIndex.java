@@ -22,14 +22,12 @@ import ca.bc.gov.nrs.vdyp.common_calculators.enumerations.SiteIndexEstimationTyp
  * Height2SiteIndex.java - given age and height, computes site index. - if age is total, site index and years to breast
  * height are iterated until stable.
  */
-@SuppressWarnings("java:S1479")
 public class Height2SiteIndex {
 	// Taken from sindex.h
 
 	/* error codes */
 	private static final int SI_ERR_NO_ANS = -4;
 
-	@SuppressWarnings("java:S3776, java:S6541")
 	public static double heightToIndex(
 			SiteIndexEquation cuIndex, double age, SiteIndexAgeType ageType, double height,
 			SiteIndexEstimationType siEstType
@@ -91,7 +89,6 @@ public class Height2SiteIndex {
 		return index;
 	}
 
-	@SuppressWarnings("java:S3776, java:S6541")
 	public static double
 			baHeightToIndex(SiteIndexEquation cuIndex, double bhage, double height, SiteIndexEstimationType siEstType)
 					throws CommonCalculatorException {
@@ -3756,7 +3753,6 @@ public class Height2SiteIndex {
 
 	}
 
-	@SuppressWarnings("java:S3776, java:S6541")
 	public static double huGarciaQ(double siteIndex, double breastHeightAge) {
 		double h, q, step, diff, lastdiff;
 

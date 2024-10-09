@@ -27,6 +27,7 @@ import ca.bc.gov.nrs.vdyp.model.GenusDefinition;
 import ca.bc.gov.nrs.vdyp.model.GenusDefinitionMap;
 import ca.bc.gov.nrs.vdyp.model.UtilizationClass;
 import ca.bc.gov.nrs.vdyp.model.UtilizationVector;
+import ca.bc.gov.nrs.vdyp.model.VdypEntity;
 import ca.bc.gov.nrs.vdyp.model.VdypLayer;
 import ca.bc.gov.nrs.vdyp.model.VdypSpecies;
 import ca.bc.gov.nrs.vdyp.model.VdypUtilizationHolder;
@@ -380,6 +381,37 @@ public class Utils {
 	 */
 	public static <T> String optPretty(Optional<T> value, Function<T, String> stringify) {
 		return (String) optNa(value.map(stringify));
+	}
+
+	/**
+	 * If <code>f</code> is <code>null</code> or <code>f.isNan()</code> is true, this method returns
+	 * <code>Optional.empty()</code> otherwise, <code>Optional.of(f)</code> is returned.
+	 *
+	 * @param f the Float to be made into an Optional
+	 * @return as described.
+	 */
+	public static Optional<Float> optFloat(Float f) {
+		assert VdypEntity.MISSING_FLOAT_VALUE.isNaN();
+		if (f == null || f.isNaN()) {
+			return Optional.empty();
+		} else {
+			return Optional.of(f);
+		}
+	}
+
+	/**
+	 * If <code>i</code> is <code>null</code> or <code>i</code> is <code>VdypEntity.MISSING_INTEGER_VALUE</code>, this
+	 * method returns <code>Optional.empty()</code> otherwise, <code>Optional.of(f)</code> is returned.
+	 *
+	 * @param i the Float to be made into an Optional
+	 * @return as described.
+	 */
+	public static Optional<Integer> optInt(Integer i) {
+		if (i == null || i.equals(VdypEntity.MISSING_INTEGER_VALUE)) {
+			return Optional.empty();
+		} else {
+			return Optional.of(i);
+		}
 	}
 
 	/**

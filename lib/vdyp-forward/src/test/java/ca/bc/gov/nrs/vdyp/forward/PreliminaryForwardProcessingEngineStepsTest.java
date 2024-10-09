@@ -5,16 +5,11 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,16 +22,15 @@ import ca.bc.gov.nrs.vdyp.common_calculators.custom_exceptions.SpeciesErrorExcep
 import ca.bc.gov.nrs.vdyp.common_calculators.enumerations.SiteIndexEquation;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.model.CommonData;
-import ca.bc.gov.nrs.vdyp.model.LayerType;
 import ca.bc.gov.nrs.vdyp.model.MatrixMap2Impl;
 import ca.bc.gov.nrs.vdyp.model.Region;
 import ca.bc.gov.nrs.vdyp.model.VdypEntity;
 import ca.bc.gov.nrs.vdyp.si32.site.SiteTool;
 
-class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngineTest {
+class PreliminaryForwardProcessingEngineStepsTest extends AbstractForwardProcessingEngineTest {
 
 	@SuppressWarnings("unused")
-	private static final Logger logger = LoggerFactory.getLogger(GeneralForwardProcessingEngineTest.class);
+	private static final Logger logger = LoggerFactory.getLogger(PreliminaryForwardProcessingEngineStepsTest.class);
 
 	@Test
 	void test() throws IOException, ResourceParseException, ProcessingException {
@@ -63,15 +57,19 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 	}
 
 	@Test
+	/** CALCULATE_COVERAGES */
 	void testFindPrimarySpecies() throws IOException, ResourceParseException, ProcessingException {
+
+		// This tests ExecutionStep.CALCULATE_COVERAGES, but that code is stand-alone and can be
+		// tested independently.
 
 		var polygon = forwardDataStreamReader.readNextPolygon().orElseThrow();
 
 		{
 			ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
-			fpe.fps.setPolygonLayer(polygon, LayerType.PRIMARY);
+			fpe.fps.setPolygon(polygon);
 
-			LayerProcessingState lps = fpe.fps.getLayerProcessingState();
+			LayerProcessingState lps = fpe.fps.getPrimaryLayerProcessingState();
 
 			ForwardProcessingEngine.calculateCoverages(lps);
 			fpe.determinePolygonRankings(CommonData.PRIMARY_SPECIES_TO_COMBINE);
@@ -84,8 +82,8 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 		}
 		{
 			ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
-			fpe.fps.setPolygonLayer(polygon, LayerType.PRIMARY);
-			LayerProcessingState lps = fpe.fps.getLayerProcessingState();
+			fpe.fps.setPolygon(polygon);
+			LayerProcessingState lps = fpe.fps.getPrimaryLayerProcessingState();
 
 			var speciesToCombine = Arrays
 					.asList(Arrays.asList(lps.getBank().speciesNames[3], lps.getBank().speciesNames[4]));
@@ -104,13 +102,14 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 	}
 
 	@Test
+	/** DETERMINE_POLYGON_RANKINGS */
 	void testGroupAndStratumNumberSpecialCases() throws IOException, ResourceParseException, ProcessingException {
 
 		// We want the
 		// "equationModifierGroup.isPresent()"
 		// and the
-		// " Region.INTERIOR.equals(lps.wallet.getBecZone().getRegion())
-		// && exceptedSpeciesIndicies.contains(primarySpeciesIndex)"
+		// " Region.INTERIOR.equals(lps.wallet.getBecZone().getRegion()) &&
+		// exceptedSpeciesIndicies.contains(primarySpeciesIndex)"
 		// cases in determinePolygonRankings.
 
 		buildPolygonParserForStream(
@@ -121,7 +120,7 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 
 		buildSpeciesParserForStream(
 				"testSpecies.dat", //
-				"01002 S000001 00     1970 P  4 C  C  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0 253.9  11.1 0 -9", //
+				"01002 S000001 00     1970 P  4 C  C  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0 253.9  11.1 1 -9", //
 				"01002 S000001 00     1970"
 		);
 
@@ -132,158 +131,17 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 		ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
 		fpe.processPolygon(polygon, ForwardProcessingEngine.ExecutionStep.DETERMINE_POLYGON_RANKINGS);
 
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesIndex(), is(1));
-		assertThrows(IllegalStateException.class, () -> fpe.fps.getLayerProcessingState().getSecondarySpeciesIndex());
-		assertThat(fpe.fps.getLayerProcessingState().getInventoryTypeGroup(), is(10));
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesGroupNumber(), is(35));
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesStratumNumber(), is(24));
-	}
-
-	@Test
-	void testCombinePercentages() {
-
-		String[] speciesNames = new String[] { "AC", "B", "C", "D", "E", "F", "PW", "H", "PY", "L", "PA", "AT", "S",
-				"MB", "Y", "PL" };
-		float[] percentages = new float[] { 1.1f, 2.2f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f, 8.8f, 9.9f, 9.3f, 8.4f, 7.1f,
-				6.3f, 8.4f, 9.4f, 1.6f };
-
-		List<String> combineGroup;
-		float[] testPercentages;
-
-		combineGroup = List.of("C", "Y");
-		testPercentages = Arrays.copyOf(percentages, percentages.length);
-
-		ForwardProcessingEngine.combinePercentages(speciesNames, combineGroup, testPercentages);
-
-		assertThat(testPercentages[2], is(0f));
-		assertThat(testPercentages[14], is(12.7f));
-
-		combineGroup = List.of("D", "PL");
-		testPercentages = Arrays.copyOf(percentages, percentages.length);
-
-		ForwardProcessingEngine.combinePercentages(speciesNames, combineGroup, testPercentages);
-
-		assertThat(testPercentages[3], is(6.0f));
-		assertThat(testPercentages[15], is(0.0f));
-	}
-
-	@Test
-	void testCombinePercentagesOneGenusNotInCombinationList() {
-
-		String[] speciesNames = new String[] { "AC", "C", "D", "E", "F", "PW", "H", "PY", "L", "PA", "AT", "S", "MB",
-				"Y", "PL" };
-		float[] percentages = new float[] { 1.1f, 3.3f, 4.4f, 5.5f, 6.6f, 7.7f, 8.8f, 9.9f, 9.3f, 8.4f, 7.1f, 6.3f,
-				8.4f, 9.4f, 1.6f };
-
-		List<String> combineGroup = List.of("B", "Y");
-		float[] testPercentages = Arrays.copyOf(percentages, percentages.length);
-
-		ForwardProcessingEngine.combinePercentages(speciesNames, combineGroup, testPercentages);
-
-		assertThat(testPercentages[13], is(9.4f));
-	}
-
-	@Test
-	void testCombinePercentagesBothGeneraNotInCombinationList() {
-
-		String[] speciesNames = new String[] { "AC", "D", "E", "F", "PW", "H", "PY", "L", "PA", "AT", "S", "MB", "Y",
-				"PL" };
-		float[] percentages = new float[] { 1.1f, 4.4f, 5.5f, 6.6f, 7.7f, 8.8f, 9.9f, 9.3f, 8.4f, 7.1f, 6.3f, 8.4f,
-				9.4f, 1.6f };
-
-		List<String> combineGroup = List.of("B", "C");
-		float[] testPercentages = Arrays.copyOf(percentages, percentages.length);
-
-		ForwardProcessingEngine.combinePercentages(speciesNames, combineGroup, testPercentages);
-
-		assertThat(testPercentages, is(percentages));
-	}
-
-	@Test
-	void testCombinePercentagesBadCombinationList() {
-
-		String[] speciesNames = new String[] { "AC", "D", "E", "F", "PW", "H", "PY", "L", "PA", "AT", "S", "MB", "Y",
-				"PL" };
-		float[] percentages = new float[] { 1.1f, 4.4f, 5.5f, 6.6f, 7.7f, 8.8f, 9.9f, 9.3f, 8.4f, 7.1f, 6.3f, 8.4f,
-				9.4f, 1.6f };
-
-		List<String> combineGroup = List.of("B", "C", "D");
-
-		try {
-			ForwardProcessingEngine.combinePercentages(speciesNames, combineGroup, percentages);
-			fail();
-		} catch (IllegalArgumentException e) {
-			// expected
-		}
-	}
-
-	@Test
-	void testCombinePercentagesBadArrays() {
-
-		String[] speciesNames = new String[] { "D", "E", "F", "PW", "H", "PY", "L", "PA", "AT", "S", "MB", "Y", "PL" };
-		float[] percentages = new float[] { 1.1f, 4.4f, 5.5f, 6.6f, 7.7f, 8.8f, 9.9f, 9.3f, 8.4f, 7.1f, 6.3f, 8.4f,
-				9.4f, 1.6f };
-
-		List<String> combineGroup = List.of("B", "C");
-
-		try {
-			ForwardProcessingEngine.combinePercentages(speciesNames, combineGroup, percentages);
-			fail();
-		} catch (IllegalArgumentException e) {
-			// expected
-		}
-	}
-
-	@Test
-	void testFindInventoryTypeGroup() throws ProcessingException {
-		try {
-			ForwardProcessingEngine.findInventoryTypeGroup("A", Optional.empty(), 80.0f);
-			fail();
-		} catch (ProcessingException e) {
-			// expected
-		}
-
-		Optional<String> ac = Optional.of("AC");
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesIndex(), is(1));
 		assertThrows(
-				IllegalArgumentException.class, () -> ForwardProcessingEngine.findInventoryTypeGroup("AC", ac, 0.0f)
+				IllegalStateException.class, () -> fpe.fps.getPrimaryLayerProcessingState().getSecondarySpeciesIndex()
 		);
-
-		assertThat(ForwardProcessingEngine.findInventoryTypeGroup("AC", Optional.empty(), 80.0f), is(36));
-
-		int[] expectedResults = new int[] {
-				/* Secondary */
-				/* AC B C D E F PW H PY L PA AT S MB Y PL -- */
-				/* AC */ 35, 35, 36, 36, 35, 35, 35, 35, 35, 35, 36, 35, 36, 35, 35, 35, //
-				/* B */ 20, 19, 20, 20, 20, 20, 19, 20, 20, 20, 20, 20, 20, 19, 20, 20, //
-				/* C */ 10, 11, 10, 10, 10, 10, 11, 10, 10, 10, 10, 11, 10, 10, 10, 10, //
-				/* D */ 38, 37, 37, 38, 37, 37, 37, 37, 37, 37, 38, 37, 38, 37, 37, 37, //
-				/* E */ 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, //
-				/* F */ 8, 3, 2, 8, 8, 7, 3, 6, 7, 5, 8, 4, 8, 2, 5, 8, //
-				/* PW */ 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, //
-				/* H */ 13, 15, 14, 13, 13, 13, 13, 13, 13, 13, 13, 16, 13, 14, 13, 13, //
-				/* PY */ 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, //
-				/* L */ 34, 34, 34, 34, 34, 33, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, //
-				/* PA */ 31, 30, 30, 31, 31, 29, 29, 30, 29, 29, 31, 30, 31, 30, 28, 30, //
-				/* AT */ 42, 41, 41, 42, 42, 41, 41, 41, 41, 41, 41, 41, 42, 41, 41, 41, //
-				/* S */ 26, 24, 23, 26, 26, 22, 22, 23, 22, 22, 22, 26, 26, 23, 25, 22, //
-				/* MB */ 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, //
-				/* Y */ 10, 11, 10, 10, 10, 10, 10, 11, 10, 10, 10, 10, 11, 10, 10, 10, //
-				/* PL */ 31, 30, 30, 31, 31, 29, 29, 30, 29, 29, 28, 31, 30, 31, 30, 30 };
-
-		int currentAnswerIndex = 0;
-
-		for (String primaryGenus : CommonData.ITG_PURE.keySet()) {
-			for (Optional<String> secondaryGenus : CommonData.ITG_PURE.keySet().stream()
-					.filter(k -> !k.equals(primaryGenus)).map(k -> Optional.of(k)).collect(Collectors.toList())) {
-				int itg = ForwardProcessingEngine.findInventoryTypeGroup(primaryGenus, secondaryGenus, 50.0f);
-				assertThat(itg, is(expectedResults[currentAnswerIndex++]));
-			}
-			int itg = ForwardProcessingEngine.findInventoryTypeGroup(primaryGenus, Optional.empty(), 50.0f);
-			assertThat(itg, is(expectedResults[currentAnswerIndex++]));
-		}
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getInventoryTypeGroup(), is(9));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesGroupNumber(), is(34));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesStratumNumber(), is(24));
 	}
 
 	@Test
+	/** CALCULATE_MISSING_SITE_CURVES */
 	void testCalculateMissingSiteCurves() throws IOException, ResourceParseException, ProcessingException {
 
 		buildSpeciesParserForStream(
@@ -291,7 +149,7 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 				"01002 S000001 00     1970 P  3 B  B  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0  -9.0  -9.0 0 -9", //
 				"01002 S000001 00     1970 P  4 C  C  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0  -9.0  -9.0 0 -9", //
 				"01002 S000001 00     1970 P  5 D  D  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0  62.9   9.1 0 -9", //
-				"01002 S000001 00     1970 P  8 H  H  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0 253.9  11.1 0 -9", //
+				"01002 S000001 00     1970 P  8 H  H  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0 253.9  11.1 1 -9", //
 				"01002 S000001 00     1970 P 15 S  S  100.0     0.0     0.0     0.0 -9.00 -9.00  -9.0  -9.0  -9.0 0 -9", //
 				"01002 S000001 00     1970"
 		);
@@ -304,14 +162,15 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 		fpe.processPolygon(polygon, ForwardProcessingEngine.ExecutionStep.CALCULATE_MISSING_SITE_CURVES);
 
 		// Cannot check 0 since determinePolygonRankings has not been executed.
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(1), is(12));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(2), is(2));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(3), is(42));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(4), is(10));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(5), is(10));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(1), is(118));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(2), is(122));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(3), is(13));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(4), is(99));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(5), is(59));
 	}
 
 	@Test
+	/** CALCULATE_MISSING_SITE_CURVES alternate */
 	void testCalculateMissingSiteCurvesNoSiteCurveData()
 			throws IOException, ResourceParseException, ProcessingException {
 
@@ -320,7 +179,7 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 				"01002 S000001 00     1970 P  3 B       0.0     0.0     0.0     0.0 -9.00 -9.00  -9.0  -9.0  -9.0 0 -9", //
 				"01002 S000001 00     1970 P  4 C       0.0     0.0     0.0     0.0 13.40 -9.00  -9.0  -9.0  -9.0 0 -9", //
 				"01002 S000001 00     1970 P  5 D       0.0     0.0     0.0     0.0 -9.00 -9.00  -9.0  62.9   9.1 0 -9", //
-				"01002 S000001 00     1970 P  8 H       0.0     0.0     0.0     0.0 -9.00 -9.00  -9.0 253.9  11.1 0 -9", //
+				"01002 S000001 00     1970 P  8 H       0.0     0.0     0.0     0.0 -9.00 -9.00  -9.0 253.9  11.1 1 -9", //
 				"01002 S000001 00     1970 P 15 S       0.0     0.0     0.0     0.0 -9.00 -9.00  -9.0  -9.0  -9.0 0 -9", //
 				"01002 S000001 00     1970"
 		);
@@ -339,14 +198,15 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 		fpe.processPolygon(polygon, ForwardProcessingEngine.ExecutionStep.CALCULATE_MISSING_SITE_CURVES);
 
 		// Cannot check 0 since determinePolygonRankings has not been executed.
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(1), is(118));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(2), is(122));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(3), is(13));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(4), is(99));
-		assertThat(fpe.fps.getLayerProcessingState().getSiteCurveNumber(5), is(59));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(1), is(118));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(2), is(122));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(3), is(13));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(4), is(99));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getSiteCurveNumber(5), is(59));
 	}
 
 	@Test
+	/** ESTIMATE_MISSING_SITE_INDICES, step 1 */
 	void testEstimateMissingSiteIndicesStep1() throws ProcessingException, IOException, ResourceParseException,
 			CurveErrorException, SpeciesErrorException, NoAnswerException {
 
@@ -387,10 +247,13 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 //		double expectedValue = SiteTool
 //				.convertSiteIndexBetweenCurves(sourceSiteCurve, sourceSiteIndex, targetSiteCurve);
 
-		assertThat(fpe.fps.getLayerProcessingState().getBank().siteIndices[4], is(VdypEntity.MISSING_FLOAT_VALUE));
+		assertThat(
+				fpe.fps.getPrimaryLayerProcessingState().getBank().siteIndices[4], is(VdypEntity.MISSING_FLOAT_VALUE)
+		);
 	}
 
 	@Test
+	/** ESTIMATE_MISSING_SITE_INDICES, step 2 */
 	void testEstimateMissingSiteIndicesStep2() throws ProcessingException, IOException, ResourceParseException,
 			CurveErrorException, SpeciesErrorException, NoAnswerException {
 
@@ -422,15 +285,16 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 		fpe.processPolygon(polygon, ForwardProcessingEngine.ExecutionStep.ESTIMATE_MISSING_SITE_INDICES);
 
 		var sourceSiteCurve = SiteIndexEquation.SI_CWC_BARKER;
-		var sourceSiteIndex = 13.4;
-		var targetSiteCurve = SiteIndexEquation.SI_CWC_NIGH;
+		var sourceSiteIndex = 13.4f;
+		var targetSiteCurve = SiteIndexEquation.SI_HWC_WILEYAC;
 		double expectedValue = SiteTool
 				.convertSiteIndexBetweenCurves(sourceSiteCurve, sourceSiteIndex, targetSiteCurve);
 
-		assertThat(fpe.fps.getLayerProcessingState().getBank().siteIndices[2], is((float) expectedValue));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getBank().siteIndices[4], is((float) expectedValue));
 	}
 
 	@Test
+	/** ESTIMATE_MISSING_YEARS_TO_BREAST_HEIGHT_VALUES */
 	void testEstimateMissingYearsToBreastHeightValues()
 			throws ProcessingException, IOException, ResourceParseException {
 
@@ -454,12 +318,13 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 		);
 
 		assertThat(
-				fpe.fps.getLayerProcessingState().getBank().yearsToBreastHeight,
-				is(new float[] { 0.0f, 4.7f, 4.6f, 1.0f, 5.0f, 5.0f })
+				fpe.fps.getPrimaryLayerProcessingState().getBank().yearsToBreastHeight,
+				is(new float[] { 0.0f, 5.0f, 7.5f, 1.0f, 4.5f, 5.2f })
 		);
 	}
 
 	@Test
+	/** CALCULATE_DOMINANT_HEIGHT_AGE_SITE_INDEX */
 	void testCalculateDominantHeightAgeSiteIndex() throws ProcessingException, IOException, ResourceParseException {
 
 		buildSpeciesParserForStream(
@@ -491,29 +356,7 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 	}
 
 	@Test
-	void testSetEquationGroups() throws ResourceParseException, IOException, ProcessingException {
-
-		var reader = new ForwardDataStreamReader(controlMap);
-		var polygon = reader.readNextPolygon().get();
-
-		ForwardProcessingState fps = new ForwardProcessingState(controlMap);
-		fps.setPolygonLayer(polygon, LayerType.PRIMARY);
-
-		assertThat(
-				fps.getLayerProcessingState().getVolumeEquationGroups(),
-				Matchers.is(new int[] { VdypEntity.MISSING_INTEGER_VALUE, 12, 20, 25, 37, 66 })
-		);
-		assertThat(
-				fps.getLayerProcessingState().getDecayEquationGroups(),
-				Matchers.is(new int[] { VdypEntity.MISSING_INTEGER_VALUE, 7, 14, 19, 31, 54 })
-		);
-		assertThat(
-				fps.getLayerProcessingState().getBreakageEquationGroups(),
-				Matchers.is(new int[] { VdypEntity.MISSING_INTEGER_VALUE, 5, 6, 12, 17, 28 })
-		);
-	}
-
-	@Test
+	/** CALCULATE_DOMINANT_HEIGHT_AGE_SITE_INDEX */
 	void testCalculateDominantHeightAgeSiteIndexNoSecondary()
 			throws ProcessingException, IOException, ResourceParseException {
 
@@ -547,10 +390,10 @@ class GeneralForwardProcessingEngineTest extends AbstractForwardProcessingEngine
 		ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
 		fpe.processPolygon(polygon, ForwardProcessingEngine.ExecutionStep.CALCULATE_DOMINANT_HEIGHT_AGE_SITE_INDEX);
 
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesDominantHeight(), is(22.950302f));
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesSiteIndex(), is(34.0f));
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesTotalAge(), is(22.0f));
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesAgeAtBreastHeight(), is(Float.NaN));
-		assertThat(fpe.fps.getLayerProcessingState().getPrimarySpeciesAgeToBreastHeight(), is(4.7f));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesDominantHeight(), is(22.950302f));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesSiteIndex(), is(34.0f));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesTotalAge(), is(22.0f));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesAgeAtBreastHeight(), is(Float.NaN));
+		assertThat(fpe.fps.getPrimaryLayerProcessingState().getPrimarySpeciesAgeToBreastHeight(), is(7.7f));
 	}
 }

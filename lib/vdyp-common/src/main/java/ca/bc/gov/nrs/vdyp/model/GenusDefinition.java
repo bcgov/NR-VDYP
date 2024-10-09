@@ -6,7 +6,6 @@ public class GenusDefinition extends AliasedEntity implements Comparable<GenusDe
 
 	private final int index;
 
-	@SuppressWarnings("java:S2789")
 	public GenusDefinition(String alias, int index, String name) {
 		super(alias, name);
 

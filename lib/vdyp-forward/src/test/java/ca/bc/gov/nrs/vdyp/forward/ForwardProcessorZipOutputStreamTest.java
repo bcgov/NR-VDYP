@@ -30,9 +30,9 @@ import ca.bc.gov.nrs.vdyp.io.ZipOutputFileResolver;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.test.TestUtils;
 
-class ForwardProcessorTest {
+class ForwardProcessorZipOutputStreamTest {
 
-	private static final Logger logger = LoggerFactory.getLogger(ForwardProcessorTest.class);
+	private static final Logger logger = LoggerFactory.getLogger(ForwardProcessorZipOutputStreamTest.class);
 
 	private static Set<ForwardPass> vdypPassSet = new HashSet<>(Arrays.asList(PASS_1, PASS_2, PASS_3, PASS_4, PASS_5));
 

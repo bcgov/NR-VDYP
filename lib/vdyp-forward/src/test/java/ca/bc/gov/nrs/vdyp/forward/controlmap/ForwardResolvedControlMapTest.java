@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import ca.bc.gov.nrs.vdyp.forward.ForwardControlParser;
 import ca.bc.gov.nrs.vdyp.forward.model.ForwardControlVariables;
 import ca.bc.gov.nrs.vdyp.forward.model.ForwardDebugSettings;
-import ca.bc.gov.nrs.vdyp.forward.test.VdypForwardTestUtils;
+import ca.bc.gov.nrs.vdyp.forward.test.ForwardTestUtils;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.model.BecLookup;
 import ca.bc.gov.nrs.vdyp.model.CompVarAdjustments;
@@ -31,7 +31,7 @@ public class ForwardResolvedControlMapTest {
 		logger.info(this.getClass().getName() + ":testForwardResolvedControlMap running...");
 
 		var parser = new ForwardControlParser();
-		var rawControlMap = VdypForwardTestUtils.parse(parser, "VDYP.CTR");
+		var rawControlMap = ForwardTestUtils.parse(parser, "VDYP.CTR");
 		var forwardControlMap = new ForwardResolvedControlMapImpl(rawControlMap);
 
 		assertThat(forwardControlMap.getControlMap(), is(rawControlMap));

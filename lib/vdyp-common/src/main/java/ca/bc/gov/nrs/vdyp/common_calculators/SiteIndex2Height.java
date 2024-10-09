@@ -20,7 +20,6 @@ import ca.bc.gov.nrs.vdyp.common_calculators.enumerations.SiteIndexEquation;
 /**
  * SiteIndex2Height.java - given site index and age, computes site height.
  */
-@SuppressWarnings("java:S1479")
 public class SiteIndex2Height {
 
 	/**
@@ -2083,7 +2082,7 @@ public class SiteIndex2Height {
 			}
 
 			height = Utils.computeInFeet(siteIndex, siteIndexFt -> {
-				double x1 = 2500 / (siteIndex - 4.5);
+				double x1 = 2500 / (siteIndexFt - 4.5);
 
 				double x2 = -1.7307 + 0.1394 * x1;
 				double x3 = -0.0616 + 0.0137 * x1;

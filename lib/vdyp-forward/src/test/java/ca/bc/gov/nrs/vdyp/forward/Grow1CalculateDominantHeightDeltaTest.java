@@ -27,17 +27,17 @@ import org.slf4j.LoggerFactory;
 
 import ca.bc.gov.nrs.vdyp.application.ProcessingException;
 import ca.bc.gov.nrs.vdyp.common.ControlKey;
-import ca.bc.gov.nrs.vdyp.forward.test.VdypForwardTestUtils;
+import ca.bc.gov.nrs.vdyp.forward.ForwardProcessingEngine.ExecutionStep;
+import ca.bc.gov.nrs.vdyp.forward.test.ForwardTestUtils;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParser;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParserFactory;
-import ca.bc.gov.nrs.vdyp.model.LayerType;
 import ca.bc.gov.nrs.vdyp.model.PolygonIdentifier;
 import ca.bc.gov.nrs.vdyp.model.VdypPolygon;
 
-class CalculateDominantHeightDeltaTest {
+class Grow1CalculateDominantHeightDeltaTest {
 
-	protected static final Logger logger = LoggerFactory.getLogger(CalculateDominantHeightDeltaTest.class);
+	protected static final Logger logger = LoggerFactory.getLogger(Grow1CalculateDominantHeightDeltaTest.class);
 
 	protected static ForwardControlParser parser;
 	protected static Map<String, Object> controlMap;
@@ -51,7 +51,7 @@ class CalculateDominantHeightDeltaTest {
 	@BeforeEach
 	void beforeTest() throws IOException, ResourceParseException, ProcessingException {
 		parser = new ForwardControlParser();
-		controlMap = VdypForwardTestUtils.parse(parser, "VDYP.CTR");
+		controlMap = ForwardTestUtils.parse(parser, "VDYP.CTR");
 
 		polygonDescriptionStreamFactory = (StreamingParserFactory<PolygonIdentifier>) controlMap
 				.get(ControlKey.FORWARD_INPUT_GROWTO.name());
@@ -65,8 +65,10 @@ class CalculateDominantHeightDeltaTest {
 
 		ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
 
+		var polygon = forwardDataStreamReader.readNextPolygon().orElseThrow();
+
 		// Select the first polygon - 01002 S000001 00(1970)
-		fpe.fps.setPolygonLayer(forwardDataStreamReader.readNextPolygon().orElseThrow(), LayerType.PRIMARY);
+		fpe.fps.setPolygon(polygon);
 
 		float hd = 35.2999992f;
 		int sc = 13;
@@ -89,7 +91,7 @@ class CalculateDominantHeightDeltaTest {
 			polygon = forwardDataStreamReader.readNextPolygon().orElseThrow();
 		} while (!polygon.getPolygonIdentifier().getName().equals("01003AS000001 00"));
 
-		fpe.fps.setPolygonLayer(polygon, LayerType.PRIMARY);
+		fpe.fps.setPolygon(polygon);
 
 		float hd = 29.5f;
 		int sc = 11;
@@ -112,7 +114,9 @@ class CalculateDominantHeightDeltaTest {
 			polygon = forwardDataStreamReader.readNextPolygon().orElseThrow();
 		} while (!polygon.getPolygonIdentifier().getName().equals("01003AS000001 00"));
 
-		fpe.fps.setPolygonLayer(polygon, LayerType.PRIMARY);
+		fpe.fps.setPolygon(polygon);
+
+		fpe.processPolygon(polygon, ExecutionStep.GROW_1_LAYER_DHDELTA.predecessor());
 
 		float hd = 26.5f;
 		int sc = 11;

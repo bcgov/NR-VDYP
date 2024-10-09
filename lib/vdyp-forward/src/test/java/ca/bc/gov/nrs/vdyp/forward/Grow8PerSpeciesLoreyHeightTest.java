@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.is;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,16 +15,17 @@ import ca.bc.gov.nrs.vdyp.application.ProcessingException;
 import ca.bc.gov.nrs.vdyp.common.ControlKey;
 import ca.bc.gov.nrs.vdyp.forward.ForwardProcessingEngine.ExecutionStep;
 import ca.bc.gov.nrs.vdyp.forward.model.ForwardDebugSettings.Vars;
-import ca.bc.gov.nrs.vdyp.forward.test.VdypForwardTestUtils;
+import ca.bc.gov.nrs.vdyp.forward.test.ForwardTestUtils;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParser;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParserFactory;
 import ca.bc.gov.nrs.vdyp.model.PolygonIdentifier;
+import ca.bc.gov.nrs.vdyp.model.UtilizationClass;
 import ca.bc.gov.nrs.vdyp.model.VdypPolygon;
 
-class CalculateBasalAreaDeltaTest {
+class Grow8PerSpeciesLoreyHeightTest {
 
-	protected static final Logger logger = LoggerFactory.getLogger(CalculateBasalAreaDeltaTest.class);
+	protected static final Logger logger = LoggerFactory.getLogger(Grow8PerSpeciesLoreyHeightTest.class);
 
 	protected static ForwardControlParser parser;
 	protected static Map<String, Object> controlMap;
@@ -39,7 +39,7 @@ class CalculateBasalAreaDeltaTest {
 	@BeforeEach
 	void beforeTest() throws IOException, ResourceParseException, ProcessingException {
 		parser = new ForwardControlParser();
-		controlMap = VdypForwardTestUtils.parse(parser, "VDYP.CTR");
+		controlMap = ForwardTestUtils.parse(parser, "VDYP.CTR");
 
 		polygonDescriptionStreamFactory = (StreamingParserFactory<PolygonIdentifier>) controlMap
 				.get(ControlKey.FORWARD_INPUT_GROWTO.name());
@@ -56,57 +56,33 @@ class CalculateBasalAreaDeltaTest {
 		// Select the first polygon - 01002 S000001 00(1970)
 		VdypPolygon polygon = forwardDataStreamReader.readNextPolygon().orElseThrow();
 
-		fpe.processPolygon(polygon, ExecutionStep.GROW.predecessor());
+		fpe.fps.fcm.getDebugSettings().setValue(Vars.LOREY_HEIGHT_CHANGE_STRATEGY_8, 0);
+		fpe.processPolygon(polygon, ExecutionStep.GROW_8_SPECIES_LH);
 
-		float yabh = 54.0f;
-		float hd = 35.2999992f;
-		float ba = 45.3864441f;
-		float growthInHd = 0.173380271f;
+		LayerProcessingState lps = fpe.fps.getPrimaryLayerProcessingState();
 
-		float gba = fpe.calculateBasalAreaDelta(yabh, hd, ba, Optional.empty(), growthInHd);
+		var calculatedLayerDq = lps.getBank().quadMeanDiameters[0][UtilizationClass.ALL.ordinal()];
 
-		assertThat(gba, is(0.35185286f));
+		// VDYP7 value is 31.3084507
+		assertThat(calculatedLayerDq, is(31.308355f));
 	}
 
 	@Test
-	void testYoungPath() throws ProcessingException {
+	void testDebug8Setting2() throws ProcessingException {
 
 		ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
 
 		// Select the first polygon - 01002 S000001 00(1970)
 		VdypPolygon polygon = forwardDataStreamReader.readNextPolygon().orElseThrow();
 
-		fpe.processPolygon(polygon, ExecutionStep.GROW.predecessor());
+		fpe.fps.fcm.getDebugSettings().setValue(Vars.LOREY_HEIGHT_CHANGE_STRATEGY_8, 2);
+		fpe.processPolygon(polygon, ExecutionStep.GROW_8_SPECIES_LH);
 
-		float yabh = 30.0f;
-		float hd = 10.0f;
-		float ba = 200.0f;
-		float growthInHd = 0.173380271f;
+		LayerProcessingState lps = fpe.fps.getPrimaryLayerProcessingState();
 
-		float gba = fpe.calculateBasalAreaDelta(yabh, hd, ba, Optional.empty(), growthInHd);
+		var calculatedLayerDq = lps.getBank().quadMeanDiameters[0][UtilizationClass.ALL.ordinal()];
 
-		assertThat(gba, is(0.0f));
-	}
-
-	@Test
-	void testDebugSettings3EqualsZeroPath() throws ProcessingException {
-
-		ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
-
-		// Select the first polygon - 01002 S000001 00(1970)
-		VdypPolygon polygon = forwardDataStreamReader.readNextPolygon().orElseThrow();
-
-		fpe.processPolygon(polygon, ExecutionStep.GROW.predecessor());
-
-		float yabh = 54.0f;
-		float hd = 35.2999992f;
-		float ba = 45.3864441f;
-		float hdDelta = 0.173380271f;
-
-		fpe.fps.fcm.getDebugSettings().setValue(Vars.BASAL_AREA_GROWTH_MODEL_3, 0);
-
-		float gba = fpe.calculateBasalAreaDelta(yabh, hd, ba, Optional.empty(), hdDelta);
-
-		assertThat(gba, is(-0.10392746f));
+		// VDYP7 value is 31.3084507
+		assertThat(calculatedLayerDq, is(31.308355f));
 	}
 }

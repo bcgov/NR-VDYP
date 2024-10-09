@@ -13,7 +13,6 @@ import ca.bc.gov.nrs.vdyp.io.parse.value.ValueParseException;
  * @param <Result>
  */
 @FunctionalInterface
-@SuppressWarnings("java:S119")
 public interface ParseEntryHandler<Entry, Result> {
 
 	/**

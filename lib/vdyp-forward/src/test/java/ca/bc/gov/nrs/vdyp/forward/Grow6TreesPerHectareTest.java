@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import ca.bc.gov.nrs.vdyp.application.ProcessingException;
 import ca.bc.gov.nrs.vdyp.common.ControlKey;
 import ca.bc.gov.nrs.vdyp.forward.ForwardProcessingEngine.ExecutionStep;
-import ca.bc.gov.nrs.vdyp.forward.test.VdypForwardTestUtils;
+import ca.bc.gov.nrs.vdyp.forward.test.ForwardTestUtils;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParser;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParserFactory;
@@ -38,7 +38,7 @@ class Grow6TreesPerHectareTest {
 	@BeforeEach
 	void beforeTest() throws IOException, ResourceParseException, ProcessingException {
 		parser = new ForwardControlParser();
-		controlMap = VdypForwardTestUtils.parse(parser, "VDYP.CTR");
+		controlMap = ForwardTestUtils.parse(parser, "VDYP.CTR");
 
 		polygonDescriptionStreamFactory = (StreamingParserFactory<PolygonIdentifier>) controlMap
 				.get(ControlKey.FORWARD_INPUT_GROWTO.name());
@@ -57,11 +57,11 @@ class Grow6TreesPerHectareTest {
 
 		fpe.processPolygon(polygon, ExecutionStep.GROW_6_LAYER_TPH2);
 
-		LayerProcessingState lps = fpe.fps.getLayerProcessingState();
+		LayerProcessingState lps = fpe.fps.getPrimaryLayerProcessingState();
 
 		var calculatedLayerTph = lps.getBank().treesPerHectare[0][UtilizationClass.ALL.ordinal()];
 
 		// VDYP7 value is 594.113811
-		assertThat(calculatedLayerTph, is(601.3333f));
+		assertThat(calculatedLayerTph, is(594.1138f));
 	}
 }

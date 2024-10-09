@@ -1,7 +1,9 @@
 package ca.bc.gov.nrs.vdyp.forward;
 
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
@@ -10,6 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import ca.bc.gov.nrs.vdyp.application.ProcessingException;
+import ca.bc.gov.nrs.vdyp.common.Utils;
+import ca.bc.gov.nrs.vdyp.common_calculators.BaseAreaTreeDensityDiameter;
 import ca.bc.gov.nrs.vdyp.model.BecDefinition;
 import ca.bc.gov.nrs.vdyp.model.Sp64DistributionSet;
 import ca.bc.gov.nrs.vdyp.model.UtilizationClass;
@@ -23,6 +27,8 @@ class Bank {
 
 	@SuppressWarnings("unused")
 	private static final Logger logger = LoggerFactory.getLogger(Bank.class);
+
+	private static final int N_UTILIZATION_CLASSES = UtilizationClass.values().length;
 
 	private final VdypLayer layer;
 	private final BecDefinition becZone;
@@ -60,8 +66,7 @@ class Bank {
 	public final float[/* nSpecies + 1, including 0 */][/* all ucs */] treesPerHectare; // BANK1 TPHB
 	public final float[/* nSpecies + 1, including 0 */][/* all ucs */] wholeStemVolumes; // BANK1 VOLWSB
 
-	public Bank(VdypLayer layer, BecDefinition becZone, Predicate<VdypSpecies> retainCriteria)
-			throws ProcessingException {
+	public Bank(VdypLayer layer, BecDefinition becZone, Predicate<VdypSpecies> retainCriteria) {
 
 		this.layer = layer;
 		this.becZone = becZone;
@@ -84,24 +89,27 @@ class Bank {
 		speciesIndices = new int[nSpecies + 1];
 		percentagesOfForestedLand = new float[nSpecies + 1];
 
-		int nUtilizationClasses = UtilizationClass.values().length;
-
 		// In the following, index 0 is used for the default species utilization
-		basalAreas = new float[nSpecies + 1][nUtilizationClasses];
-		closeUtilizationVolumes = new float[nSpecies + 1][nUtilizationClasses];
-		cuVolumesMinusDecay = new float[nSpecies + 1][nUtilizationClasses];
-		cuVolumesMinusDecayAndWastage = new float[nSpecies + 1][nUtilizationClasses];
+		basalAreas = new float[nSpecies + 1][N_UTILIZATION_CLASSES];
+		closeUtilizationVolumes = new float[nSpecies + 1][N_UTILIZATION_CLASSES];
+		cuVolumesMinusDecay = new float[nSpecies + 1][N_UTILIZATION_CLASSES];
+		cuVolumesMinusDecayAndWastage = new float[nSpecies + 1][N_UTILIZATION_CLASSES];
 		loreyHeights = new float[nSpecies + 1][2];
-		quadMeanDiameters = new float[nSpecies + 1][nUtilizationClasses];
-		treesPerHectare = new float[nSpecies + 1][nUtilizationClasses];
-		wholeStemVolumes = new float[nSpecies + 1][nUtilizationClasses];
-
-		transferUtilizationSetIntoBank(0, layer);
+		quadMeanDiameters = new float[nSpecies + 1][N_UTILIZATION_CLASSES];
+		treesPerHectare = new float[nSpecies + 1][N_UTILIZATION_CLASSES];
+		wholeStemVolumes = new float[nSpecies + 1][N_UTILIZATION_CLASSES];
 
 		int nextSlot = 1;
 		for (VdypSpecies s : speciesToRetain) {
 			transferSpeciesIntoBank(nextSlot++, s);
 		}
+
+		transferUtilizationSetIntoBank(0, layer);
+
+		// BANKCHK1 - calculate UC All values from components (rather than rely on the values
+		// provided in the input.)
+
+		setCalculateUtilizationClassAllValues();
 	}
 
 	public Bank(Bank source) {
@@ -177,7 +185,7 @@ class Bank {
 		}
 	}
 
-	private void transferSpeciesIntoBank(int index, VdypSpecies species) throws ProcessingException {
+	private void transferSpeciesIntoBank(int index, VdypSpecies species) {
 
 		speciesNames[index] = species.getGenus();
 		sp64Distributions[index] = species.getSp64DistributionSet();
@@ -227,18 +235,145 @@ class Bank {
 	}
 
 	/**
+	 * For each species, set uc All to the sum of the UC values, UC 7.5 and above only, for the summable values, and
+	 * calculate quad-mean-diameter from these values.
+	 * <p>
+	 * For the layer, set uc All values (for summable types) to the sum of those of the individual species and set the
+	 * other uc values to the sum of those of the individual species. Calculate the uc All value for quad-mean-diameter,
+	 * and the uc All and Small value for lorey-height.
+	 */
+	private void setCalculateUtilizationClassAllValues() {
+
+		int layerIndex = 0;
+		int ucAllIndex = UtilizationClass.ALL.ordinal();
+		int ucSmallIndex = UtilizationClass.SMALL.ordinal();
+
+		// Each species
+
+		for (int sp0Index : indices) {
+
+			basalAreas[sp0Index][ucAllIndex] = sumUtilizationClassValues(
+					basalAreas[sp0Index], UtilizationClass.UTIL_CLASSES
+			);
+			treesPerHectare[sp0Index][ucAllIndex] = sumUtilizationClassValues(
+					treesPerHectare[sp0Index], UtilizationClass.UTIL_CLASSES
+			);
+			wholeStemVolumes[sp0Index][ucAllIndex] = sumUtilizationClassValues(
+					wholeStemVolumes[sp0Index], UtilizationClass.UTIL_CLASSES
+			);
+			closeUtilizationVolumes[sp0Index][ucAllIndex] = sumUtilizationClassValues(
+					closeUtilizationVolumes[sp0Index], UtilizationClass.UTIL_CLASSES
+			);
+			cuVolumesMinusDecay[sp0Index][ucAllIndex] = sumUtilizationClassValues(
+					cuVolumesMinusDecay[sp0Index], UtilizationClass.UTIL_CLASSES
+			);
+			cuVolumesMinusDecayAndWastage[sp0Index][ucAllIndex] = sumUtilizationClassValues(
+					cuVolumesMinusDecayAndWastage[sp0Index], UtilizationClass.UTIL_CLASSES
+			);
+
+			if (basalAreas[sp0Index][ucAllIndex] > 0.0f) {
+				quadMeanDiameters[sp0Index][ucAllIndex] = BaseAreaTreeDensityDiameter
+						.quadMeanDiameter(basalAreas[sp0Index][ucAllIndex], treesPerHectare[sp0Index][ucAllIndex]);
+			}
+		}
+
+		// Layer
+
+		basalAreas[layerIndex][ucAllIndex] = sumSpeciesUtilizationClassValues(basalAreas, UtilizationClass.ALL);
+		treesPerHectare[layerIndex][ucAllIndex] = sumSpeciesUtilizationClassValues(
+				treesPerHectare, UtilizationClass.ALL
+		);
+		wholeStemVolumes[layerIndex][ucAllIndex] = sumSpeciesUtilizationClassValues(
+				wholeStemVolumes, UtilizationClass.ALL
+		);
+		closeUtilizationVolumes[layerIndex][ucAllIndex] = sumSpeciesUtilizationClassValues(
+				closeUtilizationVolumes, UtilizationClass.ALL
+		);
+		cuVolumesMinusDecay[layerIndex][ucAllIndex] = sumSpeciesUtilizationClassValues(
+				cuVolumesMinusDecay, UtilizationClass.ALL
+		);
+		cuVolumesMinusDecayAndWastage[layerIndex][ucAllIndex] = sumSpeciesUtilizationClassValues(
+				cuVolumesMinusDecayAndWastage, UtilizationClass.ALL
+		);
+
+		// Calculate the layer's uc All values for quad-mean-diameter and lorey height
+
+		float sumLoreyHeightByBasalAreaSmall = 0.0f;
+		float sumBasalAreaSmall = 0.0f;
+		float sumLoreyHeightByBasalAreaAll = 0.0f;
+
+		for (int sp0Index : indices) {
+			sumLoreyHeightByBasalAreaSmall += loreyHeights[sp0Index][ucSmallIndex] * basalAreas[sp0Index][ucSmallIndex];
+			sumBasalAreaSmall += basalAreas[sp0Index][ucSmallIndex];
+			sumLoreyHeightByBasalAreaAll += loreyHeights[sp0Index][ucAllIndex] * basalAreas[sp0Index][ucAllIndex];
+		}
+
+		if (basalAreas[layerIndex][ucAllIndex] > 0.0f) {
+			quadMeanDiameters[layerIndex][ucAllIndex] = BaseAreaTreeDensityDiameter
+					.quadMeanDiameter(basalAreas[layerIndex][ucAllIndex], treesPerHectare[layerIndex][ucAllIndex]);
+			loreyHeights[layerIndex][ucAllIndex] = sumLoreyHeightByBasalAreaAll / basalAreas[layerIndex][ucAllIndex];
+		}
+
+		// Calculate the layer's lorey height uc Small value
+
+		if (sumBasalAreaSmall > 0.0f) {
+			loreyHeights[layerIndex][ucSmallIndex] = sumLoreyHeightByBasalAreaSmall / sumBasalAreaSmall;
+		}
+
+		// Finally, set the layer's summable UC values (other than All, which was computed above) to
+		// the sums of those of each of the species.
+
+		for (UtilizationClass uc : UtilizationClass.ALL_CLASSES) {
+			basalAreas[layerIndex][uc.ordinal()] = sumSpeciesUtilizationClassValues(basalAreas, uc);
+			treesPerHectare[layerIndex][uc.ordinal()] = sumSpeciesUtilizationClassValues(treesPerHectare, uc);
+			wholeStemVolumes[layerIndex][uc.ordinal()] = sumSpeciesUtilizationClassValues(wholeStemVolumes, uc);
+			closeUtilizationVolumes[layerIndex][uc.ordinal()] = sumSpeciesUtilizationClassValues(
+					closeUtilizationVolumes, uc
+			);
+			cuVolumesMinusDecay[layerIndex][uc.ordinal()] = sumSpeciesUtilizationClassValues(cuVolumesMinusDecay, uc);
+			cuVolumesMinusDecayAndWastage[layerIndex][uc.ordinal()] = sumSpeciesUtilizationClassValues(
+					cuVolumesMinusDecayAndWastage, uc
+			);
+		}
+	}
+
+	private float sumUtilizationClassValues(float[] ucValues, List<UtilizationClass> subjects) {
+		float sum = 0.0f;
+
+		for (UtilizationClass uc : UtilizationClass.values()) {
+			if (subjects.contains(uc)) {
+				sum += ucValues[uc.ordinal()];
+			}
+		}
+
+		return sum;
+	}
+
+	private float sumSpeciesUtilizationClassValues(float[][] ucValues, UtilizationClass uc) {
+		float sum = 0.0f;
+
+		for (int sp0Index : this.indices) {
+			sum += ucValues[sp0Index][uc.ordinal()];
+		}
+
+		return sum;
+	}
+
+	/**
 	 * This method copies the Bank contents out to the VdypLayer instance used to create it and returns that. It is a
 	 * relatively expensive operation and should not be called without due consideration.
 	 *
 	 * @return as described
 	 */
-	VdypLayer getLayer() {
+	VdypLayer buildLayerFromBank() {
 
 		transferUtilizationsFromBank(0, layer);
 
+		Collection<VdypSpecies> newSpecies = new ArrayList<>();
 		for (int i : indices) {
-			transferSpeciesFromBank(i, layer.getSpecies().get(speciesNames[i]));
+			newSpecies.add(transferSpeciesFromBank(i, layer.getSpecies().get(speciesNames[i])));
 		}
+		layer.setSpecies(newSpecies);
 
 		return layer;
 	}
@@ -246,17 +381,30 @@ class Bank {
 	private VdypSpecies transferSpeciesFromBank(int index, VdypSpecies species) {
 
 		VdypSpecies newSpecies = VdypSpecies.build(speciesBuilder -> {
-			speciesBuilder.adapt(species);
+			speciesBuilder.copy(species);
 			speciesBuilder.percentGenus(this.percentagesOfForestedLand[index]);
-			species.getSite().ifPresent(site -> speciesBuilder.addSite(VdypSite.build(siteBuilder -> {
-				siteBuilder.adapt(site);
-				siteBuilder.ageTotal(this.ageTotals[index]);
-				siteBuilder.height(this.dominantHeights[index]);
-				siteBuilder.siteCurveNumber(this.siteCurveNumbers[index]);
+			species.getSite().ifPresentOrElse(site -> speciesBuilder.addSite(VdypSite.build(siteBuilder -> {
+				siteBuilder.copy(site);
 				siteBuilder.siteGenus(this.speciesNames[index]);
-				siteBuilder.siteIndex(this.siteIndices[index]);
-				siteBuilder.yearsToBreastHeight(this.yearsToBreastHeight[index]);
-			})));
+				siteBuilder.ageTotal(Utils.optFloat(ageTotals[index]));
+				siteBuilder.height(Utils.optFloat(this.dominantHeights[index]));
+				siteBuilder.siteCurveNumber(Utils.optInt(this.siteCurveNumbers[index]));
+				siteBuilder.siteIndex(Utils.optFloat(this.siteIndices[index]));
+				siteBuilder.yearsToBreastHeight(Utils.optFloat(this.yearsToBreastHeight[index]));
+			})), () -> {
+				VdypSite site = VdypSite.build(siteBuilder -> {
+					siteBuilder.polygonIdentifier(species.getPolygonIdentifier());
+					siteBuilder.layerType(species.getLayerType());
+					siteBuilder.siteGenus(this.speciesNames[index]);
+					siteBuilder.ageTotal(Utils.optFloat(this.ageTotals[index]));
+					siteBuilder.height(Utils.optFloat(this.dominantHeights[index]));
+					siteBuilder.siteCurveNumber(Utils.optInt(this.siteCurveNumbers[index]));
+					siteBuilder.siteIndex(Utils.optFloat(this.siteIndices[index]));
+					siteBuilder.yearsToBreastHeight(Utils.optFloat(this.yearsToBreastHeight[index]));
+				});
+
+				speciesBuilder.addSite(site);
+			});
 		});
 
 		transferUtilizationsFromBank(index, newSpecies);

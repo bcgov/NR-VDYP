@@ -50,7 +50,9 @@ public class VdypUtilizationParser implements ControlMapValueReplacer<Object, St
 			map(String fileName, FileResolver fileResolver, Map<String, Object> control)
 					throws IOException, ResourceParseException {
 		return () -> {
-			var lineParser = new LineParser().strippedString(25, DESCRIPTION).space(1)
+			var lineParser = new LineParser() //
+					.strippedString(25, DESCRIPTION) //
+					.space(1) //
 					.value(
 							1, LAYER_TYPE,
 							ValueParser.valueOrMarker(
@@ -60,7 +62,8 @@ public class VdypUtilizationParser implements ControlMapValueReplacer<Object, St
 											EndOfRecord.END_OF_RECORD
 									)
 							)
-					).value(3, GENUS_INDEX, ValueParser.INTEGER).space(1)
+					).value(3, GENUS_INDEX, ValueParser.INTEGER) //
+					.space(1) //
 					.value(2, GENUS, ControlledValueParser.optional(ValueParser.GENUS))
 					.value(3, UTILIZATION_CLASS_INDEX, ControlledValueParser.UTILIZATION_CLASS)
 					.value(9, BASAL_AREA, VdypForwardDefaultingParser.FLOAT_WITH_DEFAULT)

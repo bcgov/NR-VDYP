@@ -44,7 +44,6 @@ public class VdypForwardApplication extends VdypApplication {
 
 	private static Set<ForwardPass> vdypPassSet = new HashSet<>(Arrays.asList(PASS_1, PASS_2, PASS_3, PASS_4, PASS_5));
 
-	@SuppressWarnings("java:S106")
 	public static void main(final String... args) {
 
 		var app = new VdypForwardApplication();

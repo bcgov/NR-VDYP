@@ -1,8 +1,5 @@
 package ca.bc.gov.nrs.vdyp.model;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -23,20 +20,20 @@ public enum UtilizationClass {
 	private Optional<UtilizationClass> next = Optional.empty();
 	private Optional<UtilizationClass> previous = Optional.empty();
 
-	public static final Collection<UtilizationClass> UTIL_CLASSES = Collections
+	public static final List<UtilizationClass> UTIL_CLASSES = Collections
 			.unmodifiableList(List.of(U75TO125, U125TO175, U175TO225, OVER225));
 
-	public static final Collection<UtilizationClass> ALL_BUT_SMALL = Collections
+	public static final List<UtilizationClass> ALL_BUT_SMALL = Collections
 			.unmodifiableList(List.of(ALL, U75TO125, U125TO175, U175TO225, OVER225));
 
-	public static final Collection<UtilizationClass> ALL_CLASSES = Collections
+	public static final List<UtilizationClass> ALL_CLASSES = Collections
 			.unmodifiableList(List.of(SMALL, U75TO125, U125TO175, U175TO225, OVER225));
 
-	public static final Collection<UtilizationClass> ALL_BUT_LARGEST = Collections
-			.unmodifiableList(new ArrayList<>(Arrays.asList(SMALL, ALL, U75TO125, U125TO175, U175TO225)));
+	public static final List<UtilizationClass> ALL_BUT_LARGEST = Collections
+			.unmodifiableList(List.of(SMALL, ALL, U75TO125, U125TO175, U175TO225));
 
-	public static final Collection<UtilizationClass> ALL_BANDS_BUT_LARGEST = Collections
-			.unmodifiableList(new ArrayList<>(Arrays.asList(U75TO125, U125TO175, U175TO225)));
+	public static final List<UtilizationClass> ALL_BANDS_BUT_LARGEST = Collections
+			.unmodifiableList(List.of(U75TO125, U125TO175, U175TO225));
 
 	static {
 		for (int i = 1; i < UtilizationClass.values().length; i++) {

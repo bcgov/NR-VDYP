@@ -41,7 +41,6 @@ public class FloatMath {
 		return (float) Math.ceil(f);
 	}
 
-	@SuppressWarnings("squid:S4274")
 	public static float clamp(float x, float min, float max) {
 		assert max >= min : "Maximum " + max + " was less than minimum " + min;
 		if (x < min)

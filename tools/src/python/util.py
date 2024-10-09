@@ -20,4 +20,7 @@ def collect_source_files():
 
 
 def get_source_folder():
-    return os.environ['VDYP_MASTER_SOURCE_FOLDER'] or 'C:/source/vdyp/VDYP_Master/Source'
+    try:
+        return os.environ['VDYP_MASTER_SOURCE_FOLDER']
+    except KeyError:
+        return 'C:/source/vdyp/VDYP_Master/Source'

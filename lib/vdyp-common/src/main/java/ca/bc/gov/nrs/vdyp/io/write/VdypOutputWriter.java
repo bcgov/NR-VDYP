@@ -6,14 +6,19 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.stream.Stream;
 
 import ca.bc.gov.nrs.vdyp.common.ControlKey;
 import ca.bc.gov.nrs.vdyp.common.Utils;
 import ca.bc.gov.nrs.vdyp.common_calculators.BaseAreaTreeDensityDiameter;
+import ca.bc.gov.nrs.vdyp.controlmap.CachingResolvedControlMapImpl;
+import ca.bc.gov.nrs.vdyp.controlmap.ResolvedControlMap;
 import ca.bc.gov.nrs.vdyp.io.FileResolver;
+import ca.bc.gov.nrs.vdyp.math.FloatMath;
 import ca.bc.gov.nrs.vdyp.model.BaseVdypSpecies;
+import ca.bc.gov.nrs.vdyp.model.BecDefinition;
 import ca.bc.gov.nrs.vdyp.model.LayerType;
 import ca.bc.gov.nrs.vdyp.model.PolygonIdentifier;
 import ca.bc.gov.nrs.vdyp.model.PolygonMode;
@@ -35,6 +40,8 @@ public class VdypOutputWriter implements Closeable {
 	protected final OutputStream utilizationFile;
 	@SuppressWarnings("unused")
 	private Optional<OutputStream> compatibilityVariablesFile;
+
+	private ResolvedControlMap controlMap;
 
 	private Optional<Integer> currentYear = Optional.empty();
 
@@ -70,20 +77,24 @@ public class VdypOutputWriter implements Closeable {
 	 * Create a writer for Vdyp output files using provided OutputStreams. The Streams will be closed when the writer is
 	 * closed.
 	 *
+	 * @param controlMap
 	 * @param polygonFile
 	 * @param speciesFile
 	 * @param utilizationFile
 	 * @param compatibilityVariablesFile
-	 * @param controlMap
 	 */
-	public VdypOutputWriter(OutputStream polygonFile, OutputStream speciesFile, OutputStream utilizationFile) {
-		this(polygonFile, speciesFile, utilizationFile, Optional.empty());
+	public VdypOutputWriter(
+			Map<String, Object> controlMap, OutputStream polygonFile, OutputStream speciesFile,
+			OutputStream utilizationFile
+	) {
+		this(controlMap, polygonFile, speciesFile, utilizationFile, Optional.empty());
 	}
 
 	/**
 	 * Create a writer for Vdyp output files using provided OutputStreams. The Streams will be closed when the writer is
 	 * closed.
 	 *
+	 * @param controlMap
 	 * @param polygonFile
 	 * @param speciesFile
 	 * @param utilizationFile
@@ -91,9 +102,10 @@ public class VdypOutputWriter implements Closeable {
 	 * @param controlMap
 	 */
 	public VdypOutputWriter(
-			OutputStream polygonFile, OutputStream speciesFile, OutputStream utilizationFile,
-			Optional<OutputStream> compatibilityVariablesFile
+			Map<String, Object> controlMap, OutputStream polygonFile, OutputStream speciesFile,
+			OutputStream utilizationFile, Optional<OutputStream> compatibilityVariablesFile
 	) {
+		this.controlMap = new CachingResolvedControlMapImpl(controlMap);
 		this.polygonFile = polygonFile;
 		this.speciesFile = speciesFile;
 		this.utilizationFile = utilizationFile;
@@ -110,7 +122,7 @@ public class VdypOutputWriter implements Closeable {
 	 */
 	public VdypOutputWriter(Map<String, Object> controlMap, FileResolver resolver) throws IOException {
 		this(
-				getOutputStream(controlMap, resolver, ControlKey.VDYP_OUTPUT_VDYP_POLYGON.name()),
+				controlMap, getOutputStream(controlMap, resolver, ControlKey.VDYP_OUTPUT_VDYP_POLYGON.name()),
 				getOutputStream(controlMap, resolver, ControlKey.VDYP_OUTPUT_VDYP_LAYER_BY_SPECIES.name()),
 				getOutputStream(controlMap, resolver, ControlKey.VDYP_OUTPUT_VDYP_LAYER_BY_SP0_BY_UTIL.name()),
 				controlMap.containsKey(ControlKey.VDYP_OUTPUT_COMPATIBILITY_VARIABLES.name()) ? Optional.of(
@@ -119,14 +131,121 @@ public class VdypOutputWriter implements Closeable {
 		);
 	}
 
+	public void setPolygonYear(int currentYear) {
+		this.currentYear = Optional.of(currentYear);
+	}
+
+	/**
+	 * Write the given polygon record for the given year to the polygon file.
+	 *
+	 * @param polygon the polygon to be written
+	 * @param year    the year of the polygon
+	 * @throws IOException
+	 */
+	public void writePolygonWithSpeciesAndUtilizationForYear(VdypPolygon polygon, int year) throws IOException {
+		setPolygonYear(year);
+		writePolygonWithSpeciesAndUtilization(polygon);
+	}
+
+	/**
+	 * Output a polygon and its children.
+	 *
+	 * @param polygon
+	 * @throws IOException
+	 */
+	// VDYP_OUT when JPROGRAM = 1 (FIPSTART) or 3 (VRISTART)
+	public void writePolygonWithSpeciesAndUtilization(VdypPolygon polygon) throws IOException {
+
+		writePolygon(polygon);
+
+		// Primary then Veteran (if present)
+		var sortedLayers = polygon.getLayers().values().stream()
+				.sorted((l1, l2) -> l1.getLayerType().getIndex() - l2.getLayerType().getIndex()).toList();
+
+		// The original VDYP7 system performs this task at this location, storing the result in
+		// a separate COMMON. Here, we store the result in the Polygon, knowing that the originally
+		// calculated values are not being used.
+		sortedLayers.stream()
+				.forEach(l -> calculateCuVolumeLessDecayWastageBreakage(controlMap, l, polygon.getBiogeoclimaticZone()));
+
+		for (var layer : sortedLayers) {
+			writeUtilization(polygon, layer, layer);
+			List<VdypSpecies> specs = new ArrayList<>(layer.getSpecies().size());
+			specs.addAll(layer.getSpecies().values());
+			specs.sort(Utils.compareUsing(BaseVdypSpecies::getGenus));
+			for (var species : specs) {
+				writeSpecies(layer, species);
+				writeUtilization(polygon, layer, species);
+			}
+		}
+		writeSpeciesEndRecord(polygon);
+		writeUtilizationEndRecord(polygon);
+	}
+
+	static void calculateCuVolumeLessDecayWastageBreakage(ResolvedControlMap controlMap, VdypLayer layer, BecDefinition bec) {
+
+		// Technically, BreakageEquationGroups are not required. If missing, it will not be
+		// possible for this method to do its work; but, it's still not an error.
+		try {
+			var beg = controlMap.getBreakageEquationGroups();
+
+			for (VdypSpecies s : layer.getSpecies().values()) {
+
+				String sp0 = s.getGenus();
+				int breakageEquationGroup = beg.get(sp0, bec.getAlias());
+
+				var breakageCoefficients = controlMap.getNetBreakageMap().get(breakageEquationGroup);
+				var a1 = breakageCoefficients.getCoe(1);
+				var a2 = breakageCoefficients.getCoe(2);
+				var a3 = breakageCoefficients.getCoe(3);
+				var a4 = breakageCoefficients.getCoe(4);
+
+				var speciesCuVolumeLessDWBByUtilization = s
+						.getCloseUtilizationVolumeNetOfDecayWasteAndBreakageByUtilization();
+
+				var speciesCuVolumeLessDWBSum = 0.0f;
+				for (UtilizationClass uc : UtilizationClass.UTIL_CLASSES) {
+					var ba = s.getBaseAreaByUtilization().get(uc);
+					var tph = s.getTreesPerHectareByUtilization().get(uc);
+					var dq = (ba > 0) ? BaseAreaTreeDensityDiameter.quadMeanDiameter(ba, tph) : 0.0f;
+					var cuVolume = s.getCloseUtilizationVolumeByUtilization().get(uc);
+					var cuVolumeLessDW = s.getCloseUtilizationVolumeNetOfDecayAndWasteByUtilization().get(uc);
+
+					var breakagePercent = FloatMath.clamp(a1 + a2 * FloatMath.log(dq), a3, a4);
+					var breakage = Math.min(breakagePercent / 100.0f * cuVolume, cuVolumeLessDW);
+					if (cuVolumeLessDW <= 0.0f) {
+						speciesCuVolumeLessDWBByUtilization.set(uc, 0.0f);
+					} else {
+						var cuVolumeLessDWBforUc = cuVolumeLessDW - breakage;
+						speciesCuVolumeLessDWBByUtilization.set(uc, cuVolumeLessDWBforUc);
+						speciesCuVolumeLessDWBSum += cuVolumeLessDWBforUc;
+					}
+				}
+
+				speciesCuVolumeLessDWBByUtilization.set(UtilizationClass.SMALL, 0.0f);
+				speciesCuVolumeLessDWBByUtilization.set(UtilizationClass.ALL, speciesCuVolumeLessDWBSum);
+			}
+
+			var layerCuVolumeLessDWBByUtilization = layer
+					.getCloseUtilizationVolumeNetOfDecayWasteAndBreakageByUtilization();
+			for (UtilizationClass uc : UtilizationClass.values()) {
+				var layerCuVolumeLessDWBSum = 0.0f;
+				for (VdypSpecies s : layer.getSpecies().values()) {
+					var speciesCuVolumeLessDWBByUtilization = s
+							.getCloseUtilizationVolumeNetOfDecayWasteAndBreakageByUtilization();
+					layerCuVolumeLessDWBSum += speciesCuVolumeLessDWBByUtilization.get(uc);
+				}
+				layerCuVolumeLessDWBByUtilization.set(uc, layerCuVolumeLessDWBSum);
+			}
+		} catch (NoSuchElementException e) {
+			// continue
+		}
+	}
+
 	static OutputStream getOutputStream(Map<String, Object> controlMap, FileResolver resolver, String key)
 			throws IOException {
 		String fileName = Utils.expectParsedControl(controlMap, key, String.class);
 		return resolver.resolveForOutput(fileName);
-	}
-
-	public void setPolygonYear(int currentYear) {
-		this.currentYear = Optional.of(currentYear);
 	}
 
 	private PolygonIdentifier getCurrentPolygonDescriptor(PolygonIdentifier originalIdentifier) {
@@ -137,9 +256,8 @@ public class VdypOutputWriter implements Closeable {
 		}
 	}
 
-	// V7W_AIP
 	/**
-	 * Write a polygon record to the polygon file
+	 * V7W_AIP - Write the given polygon record to the polygon file
 	 *
 	 * @param polygon
 	 * @throws IOException
@@ -211,10 +329,10 @@ public class VdypOutputWriter implements Closeable {
 	 *
 	 * @param polygon
 	 * @param layer
-	 * @return
+	 * @return if layer is PRIMARY, the polygon's precentage available or else (VETERAN) return 1.0.
 	 */
 	protected float fractionForest(VdypPolygon polygon, VdypLayer layer) {
-		return polygon.getPercentAvailable() / 100f;
+		return LayerType.PRIMARY.equals(layer.getLayerType()) ? polygon.getPercentAvailable() / 100f : 1.0f;
 	}
 
 	/**
@@ -295,30 +413,6 @@ public class VdypOutputWriter implements Closeable {
 					) // FIXME: VDYP7 is being inconsistent. Should consider using -9 for both.
 			);
 		}
-	}
-
-	/**
-	 * Output a polygon and its children.
-	 *
-	 * @param polygon
-	 * @throws IOException
-	 */
-	// VDYP_OUT when JPROGRAM = 1 (FIPSTART) or 3 (VRISTART)
-	public void writePolygonWithSpeciesAndUtilization(VdypPolygon polygon) throws IOException {
-
-		writePolygon(polygon);
-		for (var layer : polygon.getLayers().values()) {
-			writeUtilization(polygon, layer, layer);
-			List<VdypSpecies> specs = new ArrayList<>(layer.getSpecies().size());
-			specs.addAll(layer.getSpecies().values());
-			specs.sort(Utils.compareUsing(BaseVdypSpecies::getGenus));
-			for (var species : specs) {
-				writeSpecies(layer, species);
-				writeUtilization(polygon, layer, species);
-			}
-		}
-		writeSpeciesEndRecord(polygon);
-		writeUtilizationEndRecord(polygon);
 	}
 
 	private void writeEndRecord(OutputStream os, VdypPolygon polygon) throws IOException {

@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Properties;
 
-@SuppressWarnings({ "java:S100", "java:S116" })
 public class VdypComponent {
 	private static final String COPYRIGHT_HOLDER = "Government of British Columbia";
 

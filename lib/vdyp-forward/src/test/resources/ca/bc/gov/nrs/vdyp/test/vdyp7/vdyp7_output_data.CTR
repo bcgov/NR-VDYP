@@ -1,0 +1,17 @@
+  0    vdyp7_output_data.CTR - contains definitions for files output from VDYP7 for purposes 
+  0        of comparison to VDYP8 output.
+  0    General Format is col 1-3   0 OR a parameter number
+  0                                (note: zero or blank implies COMMENT)
+  0                      col 5-54  Parameters or file names
+
+001 00999999                                          Max # of Polygons to process (I8)
+009 coe/Becdef.dat                                    BEC Zone Definitions
+010 coe/SP0DEF_v0.dat                                 Standard SP0 Codes        RD_SP0
+
+011 vdyp7/vdyp7_p_grow2.dat                           VDYP7 Polygon in
+012 vdyp7/vdyp7_s_grow2.dat                           VDYP7 Layer by SP0 in
+013 vdyp7/vdyp7_u_grow2.dat                           VDYP7 Layer by SP0 by Util in
+
+020 coe/VGRPDEF1.DAT                                  Defines Volume Eqn groups RD_VGRP      IPSJF117
+021 coe/DGRP.DAT                                      Defines Decay Groups      RD_DGRP      IPSJF123  
+022 coe/BGRP.DAT                                      Defines Breakage Groups   RD_BGRP      IPSJF157

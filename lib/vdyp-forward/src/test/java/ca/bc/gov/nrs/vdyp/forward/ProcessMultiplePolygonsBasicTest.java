@@ -7,20 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.io.IOException;
 
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import ca.bc.gov.nrs.vdyp.application.ProcessingException;
-import ca.bc.gov.nrs.vdyp.forward.ForwardProcessingEngine.ExecutionStep;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 
-class ForwardGrowStepTests extends AbstractForwardProcessingEngineTest {
-
-	@SuppressWarnings("unused")
-	private static final Logger logger = LoggerFactory.getLogger(ForwardGrowStepTests.class);
+class ProcessMultiplePolygonsBasicTest extends AbstractForwardProcessingEngineTest {
 
 	@Test
-	void testOnePolygon() throws IOException, ResourceParseException, ProcessingException {
+	void test() throws IOException, ResourceParseException, ProcessingException {
 
 		ForwardProcessingEngine fpe = new ForwardProcessingEngine(controlMap);
 
@@ -28,14 +22,20 @@ class ForwardGrowStepTests extends AbstractForwardProcessingEngineTest {
 		assertThat(fpe.fps.fcm.getGenusDefinitionMap(), notNullValue());
 		assertThat(fpe.fps.fcm.getSiteCurveMap(), notNullValue());
 
+		// Fetch the next polygon to process.
 		int nPolygonsProcessed = 0;
-		var polygon = forwardDataStreamReader.readNextPolygon();
+		while (polygonDescriptionStream.hasNext()) {
 
-		if (polygon.isPresent()) {
-			fpe.processPolygon(polygon.get(), ExecutionStep.GROW);
-			nPolygonsProcessed += 1;
+			var polygon = forwardDataStreamReader.readNextPolygon();
+
+			if (polygon.isPresent()) {
+				fpe.processPolygon(polygon.get());
+				nPolygonsProcessed += 1;
+			} else {
+				break;
+			}
 		}
 
-		assertEquals(1, nPolygonsProcessed);
+		assertEquals(10, nPolygonsProcessed);
 	}
 }

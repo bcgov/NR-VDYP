@@ -2921,7 +2921,7 @@ public class Sindxdll {
 	 * @param spIndex2  Target species
 	 * @param result    Floating point target species site index. (computed)
 	 *
-	 * @return 0, or an exception
+	 * @return 0. In the event of an error, an exception is thrown.
 	 *
 	 * @throws SpeciesErrorException when source or target species index is not valid
 	 * @throws NoAnswerException     when there is no conversion defined
@@ -2940,16 +2940,12 @@ public class Sindxdll {
 			throw new SpeciesErrorException("Source or target species index is not valid" + spIndex2);
 		}
 
-		if (spIndex1.equals(spIndex2)) {
-			result.set(siteIndex);
+		var params = SiteIndexNames.getSpeciesConversionParams(spIndex1, spIndex2);
+		if (params != null) {
+			result.set(params.param1() + params.param2() * siteIndex);
 		} else {
-			var params = SiteIndexNames.getSpeciesConversionParams(spIndex1, spIndex2);
-			if (params != null) {
-				result.set(params.param1() + params.param2() * siteIndex);
-			} else {
-				result.set(Double.valueOf(SI_ERR_NO_ANS));
-				throw new NoAnswerException("There is no conversion defined");
-			}
+			result.set(Double.valueOf(SI_ERR_NO_ANS));
+			throw new NoAnswerException("There is no conversion defined");
 		}
 
 		return 0;

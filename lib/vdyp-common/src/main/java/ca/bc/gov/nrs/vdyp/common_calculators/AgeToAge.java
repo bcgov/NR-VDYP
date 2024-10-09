@@ -16,7 +16,6 @@ import ca.bc.gov.nrs.vdyp.common_calculators.enumerations.SiteIndexEquation;
  */
 public class AgeToAge {
 
-	@SuppressWarnings("java:S3776, java:S6541, java:S1479")
 	public static double ageToAge(
 			SiteIndexEquation cuIndex, double sourceAge, SiteIndexAgeType sourceAgeType, SiteIndexAgeType targetAgeType,
 			double years2BreastHeight

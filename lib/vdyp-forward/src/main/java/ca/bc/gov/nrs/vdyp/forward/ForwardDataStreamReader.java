@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -14,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import ca.bc.gov.nrs.vdyp.application.ProcessingException;
 import ca.bc.gov.nrs.vdyp.common.ControlKey;
 import ca.bc.gov.nrs.vdyp.common.Utils;
-import ca.bc.gov.nrs.vdyp.forward.controlmap.ForwardResolvedControlMap;
+import ca.bc.gov.nrs.vdyp.controlmap.ResolvedControlMap;
 import ca.bc.gov.nrs.vdyp.forward.controlmap.ForwardResolvedControlMapImpl;
 import ca.bc.gov.nrs.vdyp.io.parse.common.ResourceParseException;
 import ca.bc.gov.nrs.vdyp.io.parse.streaming.StreamingParser;
@@ -33,7 +34,7 @@ public class ForwardDataStreamReader {
 
 	private static final Logger logger = LoggerFactory.getLogger(ForwardDataStreamReader.class);
 
-	private final ForwardResolvedControlMap resolvedControlMap;
+	private final ResolvedControlMap resolvedControlMap;
 
 	private final StreamingParser<VdypPolygon> polygonStream;
 	private final StreamingParser<Collection<VdypSpecies>> layerSpeciesStream;
@@ -41,7 +42,7 @@ public class ForwardDataStreamReader {
 	Optional<StreamingParser<PolygonIdentifier>> polygonDescriptionStream;
 
 	@SuppressWarnings("unchecked")
-	public ForwardDataStreamReader(ForwardResolvedControlMap resolvedControlMap) throws ProcessingException {
+	public ForwardDataStreamReader(ResolvedControlMap resolvedControlMap) throws ProcessingException {
 
 		try {
 			this.resolvedControlMap = resolvedControlMap;
@@ -77,8 +78,7 @@ public class ForwardDataStreamReader {
 	/**
 	 * Constructor that takes a raw control map. This should only be used from unit tests.
 	 *
-	 * @param controlMap
-	 * @throws IOException         in the event of an error
+	 * @param controlMap a raw (i.e., unresolved) control map
 	 * @throws ProcessingException
 	 */
 	ForwardDataStreamReader(Map<String, Object> controlMap) throws ProcessingException {
@@ -89,8 +89,6 @@ public class ForwardDataStreamReader {
 	public Optional<VdypPolygon> readNextPolygon() throws ProcessingException {
 
 		// Advance all the streams until the definition for the polygon is found.
-
-		Optional<VdypPolygon> thePolygon = Optional.empty();
 
 		try {
 			if (polygonStream.hasNext()) {
@@ -135,8 +133,8 @@ public class ForwardDataStreamReader {
 				}
 
 				var layerSpeciesSet = layerSpeciesStream.next();
-				var primarySpecies = new HashMap<Integer, VdypSpecies>();
-				var veteranSpecies = new HashMap<Integer, VdypSpecies>();
+				var primaryLayerSpecies = new HashMap<Integer, VdypSpecies>();
+				var veteranLayerSpecies = new HashMap<Integer, VdypSpecies>();
 				for (var s : layerSpeciesSet) {
 					logger.trace("Saw species {}", s);
 
@@ -156,9 +154,9 @@ public class ForwardDataStreamReader {
 					}
 
 					if (LayerType.PRIMARY.equals(s.getLayerType())) {
-						primarySpecies.put(s.getGenusIndex(), s);
+						primaryLayerSpecies.put(s.getGenusIndex(), s);
 					} else if (LayerType.VETERAN.equals(s.getLayerType())) {
-						veteranSpecies.put(s.getGenusIndex(), s);
+						veteranLayerSpecies.put(s.getGenusIndex(), s);
 					} else {
 						throw new IllegalStateException(
 								MessageFormat.format(
@@ -172,17 +170,20 @@ public class ForwardDataStreamReader {
 				Map<LayerType, VdypLayer> layerMap = new HashMap<>();
 
 				VdypLayer primaryLayer = null;
-				if (primarySpecies.size() > 0) {
+				if (primaryLayerSpecies.size() > 0) {
 
 					var key = new UtilizationBySpeciesKey(LayerType.PRIMARY, 0);
 					Map<UtilizationClass, VdypUtilization> defaultSpeciesUtilization = utilizationsBySpeciesMap
 							.get(key);
 
+					String primarySp0 = getPrimarySpecies(polygon, primaryLayerSpecies.values()).getGenus();
+
 					primaryLayer = VdypLayer.build(builder -> {
 						builder.layerType(LayerType.PRIMARY);
 						builder.polygonIdentifier(polygon.getPolygonIdentifier());
 						builder.inventoryTypeGroup(polygon.getInventoryTypeGroup());
-						builder.addSpecies(layerSpeciesSet);
+						builder.addSpecies(primaryLayerSpecies.values());
+						builder.primaryGenus(primarySp0);
 					});
 
 					setUtilizations(primaryLayer, defaultSpeciesUtilization);
@@ -191,16 +192,19 @@ public class ForwardDataStreamReader {
 				}
 
 				VdypLayer veteranLayer = null;
-				if (veteranSpecies.size() > 0) {
+				if (veteranLayerSpecies.size() > 0) {
 
 					var key = new UtilizationBySpeciesKey(LayerType.VETERAN, 0);
 					Map<UtilizationClass, VdypUtilization> defaultUtilization = utilizationsBySpeciesMap.get(key);
+
+					String primarySp0 = getPrimarySpecies(polygon, veteranLayerSpecies.values()).getGenus();
 
 					veteranLayer = VdypLayer.build(builder -> {
 						builder.layerType(LayerType.VETERAN);
 						builder.polygonIdentifier(polygon.getPolygonIdentifier());
 						builder.inventoryTypeGroup(polygon.getInventoryTypeGroup());
-						builder.addSpecies(layerSpeciesSet);
+						builder.addSpecies(veteranLayerSpecies.values());
+						builder.primaryGenus(primarySp0);
 					});
 
 					setUtilizations(veteranLayer, defaultUtilization);
@@ -210,14 +214,39 @@ public class ForwardDataStreamReader {
 
 				polygon.setLayers(layerMap);
 
-				thePolygon = Optional.of(polygon);
 				UtilizationOperations.doPostCreateAdjustments(polygon);
+
+				return Optional.of(polygon);
+			} else {
+				return Optional.empty();
 			}
 		} catch (ResourceParseException | IOException e) {
 			throw new ProcessingException(e);
 		}
+	}
 
-		return thePolygon;
+	private static VdypSpecies getPrimarySpecies(VdypPolygon polygon, Collection<VdypSpecies> speciesList)
+			throws ProcessingException {
+
+		var primarySpecies = speciesList.stream().filter(s -> s.getSite().isPresent()).toList();
+		if (primarySpecies.size() == 0) {
+			throw new ProcessingException(
+					MessageFormat.format(
+							"Primary layer of {0} does not contain a primary species",
+							polygon.getPolygonIdentifier().toStringCompact()
+					)
+			);
+		} else if (primarySpecies.size() > 1) {
+			throw new ProcessingException(
+					MessageFormat.format(
+							"Primary layer of {0} contains multiple primary species: {1}",
+							polygon.getPolygonIdentifier().toStringCompact(),
+							String.join(", ", primarySpecies.stream().map(s -> s.getGenus()).toList())
+					)
+			);
+		}
+
+		return primarySpecies.get(0);
 	}
 
 	private void calculateSpeciesCoverage(VdypSpecies s, Map<UtilizationClass, VdypUtilization> defaultUtilization) {
@@ -231,20 +260,32 @@ public class ForwardDataStreamReader {
 	protected void applyGroups(BecDefinition bec, String genus, VdypSpecies species) {
 		// Look up Volume group, Decay Group, and Breakage group for each species.
 
-		var volumeGroupMap = resolvedControlMap.getVolumeEquationGroups();
-		var decayGroupMap = resolvedControlMap.getDecayEquationGroups();
-		var breakageGroupMap = resolvedControlMap.getBreakageEquationGroups();
+		try {
+			// VGRPFIND
+			var volumeGroupMap = resolvedControlMap.getVolumeEquationGroups();
+			var volumeGroup = volumeGroupMap.get(genus, bec.getVolumeBec().getAlias());
+			species.setVolumeGroup(volumeGroup);
+		} catch (NoSuchElementException e) {
+			// group will remain undefined
+		}
 
-		// VGRPFIND
-		var volumeGroup = volumeGroupMap.get(genus, bec.getVolumeBec().getAlias());
-		// DGRPFIND
-		var decayGroup = decayGroupMap.get(genus, bec.getDecayBec().getAlias());
-		// BGRPFIND (Breakage uses decay BEC)
-		var breakageGroup = breakageGroupMap.get(genus, bec.getDecayBec().getAlias());
+		try {
+			// DGRPFIND
+			var decayGroupMap = resolvedControlMap.getDecayEquationGroups();
+			var decayGroup = decayGroupMap.get(genus, bec.getDecayBec().getAlias());
+			species.setDecayGroup(decayGroup);
+		} catch (NoSuchElementException e) {
+			// group will remain undefined
+		}
 
-		species.setVolumeGroup(volumeGroup);
-		species.setDecayGroup(decayGroup);
-		species.setBreakageGroup(breakageGroup);
+		try {
+			// BGRPFIND (Breakage uses decay BEC)
+			var breakageGroupMap = resolvedControlMap.getBreakageEquationGroups();
+			var breakageGroup = breakageGroupMap.get(genus, bec.getDecayBec().getAlias());
+			species.setBreakageGroup(breakageGroup);
+		} catch (NoSuchElementException e) {
+			// group will remain undefined
+		}
 	}
 
 	private void setUtilizations(VdypUtilizationHolder u, Map<UtilizationClass, VdypUtilization> speciesUtilizations) {

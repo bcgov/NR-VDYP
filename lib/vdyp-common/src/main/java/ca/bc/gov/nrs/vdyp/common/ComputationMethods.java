@@ -75,7 +75,16 @@ public class ComputationMethods {
 		this.context = context;
 	}
 
-	// YUC1
+	/**
+	 * YUC1 - compute Utilization components (quad-mean-diameter, basal area and trees-per-hectare) and, optionally,
+	 * volumes for a polygon's primary layer.
+	 *
+	 * @param bec                       Bec zone
+	 * @param vdypLayer                 (primary) layer in question
+	 * @param volumeComputeMode         the {@link VolumeComputeMode} under which this method is to operate
+	 * @param compatibilityVariableMode the {@link CompatibilityVariableMode} under which this method is to operate.
+	 * @throws ProcessingException
+	 */
 	public void computeUtilizationComponentsPrimary(
 			BecDefinition bec, VdypLayer vdypLayer, VolumeComputeMode volumeComputeMode,
 			CompatibilityVariableMode compatibilityVariableMode
@@ -367,7 +376,7 @@ public class ComputationMethods {
 		}
 	}
 
-	// TODO De-reflectify this when we want to make it work in GralVM
+	// TODO De-reflectify this when we want to make it work in GraalVM
 	private static void sumSpeciesUtilizationVectorsToLayer(VdypLayer vdypLayer) throws IllegalStateException {
 		try {
 			for (var accessors : SUMMABLE_UTILIZATION_VECTOR_ACCESSORS) {

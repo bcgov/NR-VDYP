@@ -7,6 +7,7 @@ import java.util.List;
 import ca.bc.gov.nrs.vdyp.application.ProcessingException;
 import ca.bc.gov.nrs.vdyp.common_calculators.BaseAreaTreeDensityDiameter;
 import ca.bc.gov.nrs.vdyp.math.FloatMath;
+import ca.bc.gov.nrs.vdyp.model.LayerType;
 import ca.bc.gov.nrs.vdyp.model.UtilizationClass;
 import ca.bc.gov.nrs.vdyp.model.VdypLayer;
 import ca.bc.gov.nrs.vdyp.model.VdypPolygon;
@@ -19,8 +20,9 @@ public class UtilizationOperations {
 	/**
 	 * Perform the following operations on the UtilizationVectors of the given polygon.
 	 * <ol>
-	 * <li>Scale the per-hectare values of all the utilizations of the primary layer of the given polygon, and
-	 * <li>For all utilizations of both the primary and veteran layer (if present) of the polygon:
+	 * <li>(VDYPGETU 212:231) Scale the per-hectare values of all the utilizations of the primary layer of the given
+	 * polygon, and
+	 * <li>(BANKIN2, ICHECK=2) For all utilizations of both the primary and veteran layer (if present) of the polygon:
 	 * <ul>
 	 * <li>Adjust the basal area to be within bounds of the utilization class, and
 	 * <li>Calculate the quad-mean-diameter value from the basal area and trees per hectare.
@@ -35,6 +37,19 @@ public class UtilizationOperations {
 		assert !Float.isNaN(percentForestedLand);
 		float scalingFactor = 100.0f / percentForestedLand;
 
+		List<VdypUtilizationHolder> primaryLayerUtilizationsToScale = new ArrayList<>();
+
+		VdypLayer primaryLayer = polygon.getLayers().get(LayerType.PRIMARY);
+		primaryLayerUtilizationsToScale.add(primaryLayer);
+		primaryLayer.getSpecies().values().stream().forEach(s -> primaryLayerUtilizationsToScale.add(s));
+
+		for (VdypUtilizationHolder uh : primaryLayerUtilizationsToScale) {
+
+			if (percentForestedLand > 0.0f && percentForestedLand < 100.0f) {
+				scale(uh, scalingFactor);
+			}
+		}
+
 		List<VdypUtilizationHolder> utilizationsToAdjust = new ArrayList<>();
 
 		for (VdypLayer l : polygon.getLayers().values()) {
@@ -46,12 +61,10 @@ public class UtilizationOperations {
 
 		for (VdypUtilizationHolder uh : utilizationsToAdjust) {
 
-			if (percentForestedLand > 0.0f && percentForestedLand < 100.0f) {
-				scale(uh, scalingFactor);
-			}
-
 			// Implements the logic in BANKIN2 (ICHECK == 2) adjusting the utilization values according to various
 			// rules.
+
+			// BANKCHK1, simplified for the parameters METH_IN = 4, LayerI = 1, and INSTANCE = 1
 
 			resetOnMissingValues(uh);
 
@@ -62,8 +75,8 @@ public class UtilizationOperations {
 	}
 
 	/**
-	 * Implements VDYPGETU lines 224 - 229, in which the utilization-per-hectare values are scaled by the given factor -
-	 * the % coverage of the primary layer.
+	 * Implements VDYPGETU lines 212-231, in which the per-hectare utilization values are scaled by the 100 / (%
+	 * forested land of polygon) of the PRIMARY LAYER only.
 	 *
 	 * @param scalingFactor the factor by which the <code>uh</code> is to be scaled
 	 */
